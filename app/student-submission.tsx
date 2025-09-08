@@ -44,7 +44,7 @@ export default function StudentSubmissionScreen() {
 
   const loadPapers = async () => {
     try {
-      const response = await paperService.getAll();
+      const response = await paperService.getAllPublic();
       console.log('Papers loaded in student portal:', JSON.stringify(response, null, 2));
       setPapers(response);
     } catch (error) {
@@ -138,30 +138,20 @@ export default function StudentSubmissionScreen() {
       
       Alert.alert(
         'Submission Complete!',
-        `Your answers have been evaluated.\n\nScore: ${response.score}/${response.totalQuestions}\nPercentage: ${response.percentage}%`,
+        `Your answer sheet has been submitted and stored successfully!\n\nStudent: ${response.studentName}\nPaper: ${response.paperName}\nScore: ${response.score} (${response.percentage})\n\n${response.driveInfo?.uploadedToDrive ? '✓ Stored in Google Drive' : '⚠ Drive upload failed'}`,
         [
-          {
-            text: 'View Results',
-            onPress: () => {
-              router.push({
-                pathname: '/result',
-                params: { 
-                  submissionId: response.submissionId,
-                  studentName: studentName,
-                  paperName: selectedPaper.name,
-                  score: response.score,
-                  total: response.totalQuestions,
-                  percentage: response.percentage
-                }
-              });
-            },
-          },
           {
             text: 'Submit Another',
             onPress: () => {
               setStudentName('');
               setSelectedPaper(null);
               setSelectedImage(null);
+            },
+          },
+          {
+            text: 'Done',
+            onPress: () => {
+              router.back();
             },
           },
         ]
@@ -243,7 +233,7 @@ export default function StudentSubmissionScreen() {
         </Card>
 
         {/* Paper Selection */}
-        {/* <Card style={styles.card}>
+        <Card style={styles.card}>
           <Card.Content>
             <Title style={styles.cardTitle}>Step 2: Select Question Paper</Title>
             
@@ -303,7 +293,7 @@ export default function StudentSubmissionScreen() {
               </View>
             )}
           </Card.Content>
-        </Card> */}
+        </Card>
         
 
         {/* Answer Sheet Upload */}

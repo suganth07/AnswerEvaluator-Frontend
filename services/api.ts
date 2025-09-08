@@ -59,6 +59,11 @@ export const paperService = {
     return response.data;
   },
   
+  getAllPublic: async () => {
+    const response = await api.get('/api/papers/public');
+    return response.data;
+  },
+  
   upload: async (formData: FormData) => {
     const response = await api.post('/api/papers/upload', formData, {
       headers: {
