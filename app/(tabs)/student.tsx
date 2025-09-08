@@ -138,30 +138,42 @@ export default function StudentSubmission() {
 
       const response = await submissionService.submit(formData);
       
-      // Extract the result data from the response
-      const result = response.result || response;
+      // The backend now returns the data directly, not nested in a 'result' property
+      const result = response;
       
       console.log('Frontend received response:', response);
       console.log('Frontend extracted result:', result);
       
+      // Extract score and total from the score string format "2/3"
+      const scoreMatch = result.score?.match(/(\d+)\/(\d+)/);
+      const score = scoreMatch ? scoreMatch[1] : '0';
+      const total = scoreMatch ? scoreMatch[2] : '0';
+      const percentage = result.percentage || '0%';
+      const submissionId = result.submissionId || null;  // Get the actual submission ID
+      
       Alert.alert(
         'Submission Complete!',
-        `Your answers have been evaluated.\n\nScore: ${result.score}/${result.totalQuestions}\nPercentage: ${result.percentage}%`,
+        `Your answers have been evaluated.\n\nScore: ${score}/${total}\nPercentage: ${percentage}`,
         [
           {
             text: 'View Results',
             onPress: () => {
-              router.push({
-                pathname: '/result',
-                params: { 
-                  submissionId: result.submissionId,
-                  studentName: studentName,
-                  paperName: selectedPaper.name,
-                  score: result.score,
-                  total: result.totalQuestions,
-                  percentage: result.percentage
-                }
-              });
+              // Only navigate to results if we have a valid submission ID
+              if (submissionId) {
+                router.push({
+                  pathname: '/result',
+                  params: { 
+                    submissionId: submissionId.toString(),
+                    studentName: studentName,
+                    paperName: selectedPaper.name,
+                    score: score,
+                    total: total,
+                    percentage: percentage
+                  }
+                });
+              } else {
+                Alert.alert('Info', 'Detailed results are not available, but your submission was recorded successfully.');
+              }
             },
           },
           {
