@@ -4,12 +4,11 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
-  SafeAreaView,
-  StatusBar,
   TouchableOpacity,
   Dimensions,
   Alert,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Text, Avatar } from "react-native-paper";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
@@ -357,12 +356,8 @@ export default function DashboardScreen() {
   return (
     <SafeAreaView
       style={[styles.safeArea, { backgroundColor: theme.colors.background }]}
+      edges={["top", "left", "right"]}
     >
-      <StatusBar
-        barStyle={isDarkMode ? "light-content" : "dark-content"}
-        backgroundColor={theme.colors.background}
-      />
-
       <ScrollView
         style={[styles.container, { backgroundColor: theme.colors.background }]}
         refreshControl={

@@ -5,22 +5,19 @@ import {
   FlatList,
   Alert,
   RefreshControl,
+  TouchableOpacity,
+  Dimensions,
 } from "react-native";
-import {
-  Card,
-  Title,
-  Paragraph,
-  Button,
-  FAB,
-  ActivityIndicator,
-  Chip,
-  Appbar,
-  IconButton,
-} from "react-native-paper";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Text, ActivityIndicator, Avatar } from "react-native-paper";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { paperService } from "../../services/api";
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+
+const { width } = Dimensions.get("window");
 
 interface Paper {
   id: number;
@@ -84,162 +81,263 @@ export default function TestsScreen() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const now = new Date();
+    const date = new Date(dateString);
+    const diffInHours = Math.floor(
+      (now.getTime() - date.getTime()) / (1000 * 60 * 60)
+    );
+
+    if (diffInHours < 1) return "Just now";
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+    if (diffInHours < 48) return "Yesterday";
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
   const getQuestionTypeInfo = (questionType: string) => {
     switch (questionType) {
       case "omr":
-        return { label: "OMR", color: "#2196F3", icon: "circle-outline" };
+        return {
+          label: "OMR",
+          color: isDarkMode ? "#60A5FA" : "#3B82F6",
+          icon: "radio-button-on" as const,
+          bgColor: isDarkMode
+            ? "rgba(96, 165, 250, 0.1)"
+            : "rgba(59, 130, 246, 0.1)",
+        };
       case "traditional":
         return {
           label: "Traditional",
-          color: "#4CAF50",
-          icon: "text-box-outline",
+          color: isDarkMode ? "#34D399" : "#10B981",
+          icon: "document-text" as const,
+          bgColor: isDarkMode
+            ? "rgba(52, 211, 153, 0.1)"
+            : "rgba(16, 185, 129, 0.1)",
         };
       case "mixed":
         return {
           label: "Mixed",
-          color: "#FF9800",
-          icon: "format-list-bulleted",
+          color: isDarkMode ? "#FBBF24" : "#F59E0B",
+          icon: "albums" as const,
+          bgColor: isDarkMode
+            ? "rgba(251, 191, 36, 0.1)"
+            : "rgba(245, 158, 11, 0.1)",
         };
       default:
         return {
           label: "Traditional",
-          color: "#4CAF50",
-          icon: "text-box-outline",
+          color: isDarkMode ? "#34D399" : "#10B981",
+          icon: "document-text" as const,
+          bgColor: isDarkMode
+            ? "rgba(52, 211, 153, 0.1)"
+            : "rgba(16, 185, 129, 0.1)",
         };
     }
   };
 
-  const renderPaper = ({ item }: { item: Paper }) => {
+  // Quick Upload FAB Component
+  const QuickUploadFAB = () => (
+    <TouchableOpacity
+      style={styles.fabContainer}
+      onPress={() => router.push("/upload")}
+    >
+      <LinearGradient
+        colors={isDarkMode ? ["#6366F1", "#8B5CF6"] : ["#6366F1", "#8B5CF6"]}
+        style={styles.fab}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <Ionicons name="add" size={24} color="white" />
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+
+  // Test Card Component
+  const TestCard = ({ item }: { item: Paper }) => {
     const questionTypeInfo = getQuestionTypeInfo(item.question_type);
 
     return (
-      <Card
-        style={[styles.paperCard, { backgroundColor: theme.colors.surface }]}
+      <TouchableOpacity
+        style={[styles.testCard, { backgroundColor: theme.colors.surface }]}
         onPress={() => viewPaperDetails(item)}
+        activeOpacity={0.7}
       >
-        <Card.Content>
-          <View style={styles.paperHeader}>
-            <Title
-              style={[styles.paperTitle, { color: theme.colors.onSurface }]}
+        <View style={styles.cardHeader}>
+          <View style={styles.cardTitleSection}>
+            <Text
+              variant="titleLarge"
+              style={[styles.cardTitle, { color: theme.colors.onSurface }]}
+              numberOfLines={2}
             >
               {item.name}
-            </Title>
-            <View style={styles.chipsContainer}>
-              <Chip
-                mode="outlined"
-                textStyle={[styles.chipText, { color: questionTypeInfo.color }]}
-                style={[styles.chip, { borderColor: questionTypeInfo.color }]}
-                icon={questionTypeInfo.icon}
-              >
-                {questionTypeInfo.label}
-              </Chip>
-              <Chip
-                mode="outlined"
-                textStyle={[
-                  styles.chipText,
-                  { color: theme.colors.onSurfaceVariant },
-                ]}
-                style={styles.chip}
-              >
-                {item.question_count} Questions
-              </Chip>
-            </View>
-          </View>
-
-          <Paragraph
-            style={[styles.paperDate, { color: theme.colors.onSurfaceVariant }]}
-          >
-            Uploaded: {formatDate(item.uploaded_at)}
-          </Paragraph>
-
-          {item.total_pages && item.total_pages > 1 && (
-            <Paragraph
+            </Text>
+            <Text
+              variant="bodySmall"
               style={[
-                styles.paperPages,
+                styles.cardDate,
                 { color: theme.colors.onSurfaceVariant },
               ]}
             >
-              📄 {item.total_pages} pages
-            </Paragraph>
-          )}
-
-          <View style={styles.paperActions}>
-            <Button
-              mode="outlined"
-              onPress={() => viewQuestions(item)}
-              style={styles.actionButton}
-              icon="format-list-bulleted"
-            >
-              View Questions
-            </Button>
-            <Button
-              mode="outlined"
-              onPress={() => viewPaperDetails(item)}
-              style={styles.actionButton}
-              icon="account-group"
-            >
-              View Submissions
-            </Button>
+              {formatDate(item.uploaded_at)}
+            </Text>
           </View>
-        </Card.Content>
-      </Card>
+          <View
+            style={[
+              styles.typeIndicator,
+              { backgroundColor: questionTypeInfo.bgColor },
+            ]}
+          >
+            <Ionicons
+              name={questionTypeInfo.icon}
+              size={20}
+              color={questionTypeInfo.color}
+            />
+          </View>
+        </View>
+
+        <View style={styles.cardStats}>
+          <View style={styles.statItem}>
+            <Ionicons
+              name="help-circle-outline"
+              size={16}
+              color={theme.colors.onSurfaceVariant}
+            />
+            <Text
+              variant="bodySmall"
+              style={[
+                styles.statText,
+                { color: theme.colors.onSurfaceVariant },
+              ]}
+            >
+              {item.question_count} Questions
+            </Text>
+          </View>
+          {item.total_pages && item.total_pages > 1 && (
+            <View style={styles.statItem}>
+              <Ionicons
+                name="document-outline"
+                size={16}
+                color={theme.colors.onSurfaceVariant}
+              />
+              <Text
+                variant="bodySmall"
+                style={[
+                  styles.statText,
+                  { color: theme.colors.onSurfaceVariant },
+                ]}
+              >
+                {item.total_pages} Pages
+              </Text>
+            </View>
+          )}
+          <View
+            style={[
+              styles.typeChip,
+              { backgroundColor: questionTypeInfo.bgColor },
+            ]}
+          >
+            <Text
+              variant="labelSmall"
+              style={[styles.typeChipText, { color: questionTypeInfo.color }]}
+            >
+              {questionTypeInfo.label}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.cardActions}>
+          <TouchableOpacity
+            style={[
+              styles.actionButton,
+              { backgroundColor: isDarkMode ? "#374151" : "#F3F4F6" },
+            ]}
+            onPress={() => viewQuestions(item)}
+          >
+            <Ionicons
+              name="list-outline"
+              size={16}
+              color={theme.colors.onSurface}
+            />
+            <Text
+              variant="bodySmall"
+              style={[
+                styles.actionButtonText,
+                { color: theme.colors.onSurface },
+              ]}
+            >
+              Questions
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.primaryActionButton]}
+            onPress={() => viewPaperDetails(item)}
+          >
+            <Ionicons name="people-outline" size={16} color="white" />
+            <Text
+              variant="bodySmall"
+              style={[styles.actionButtonText, { color: "white" }]}
+            >
+              Submissions
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
     );
   };
 
   if (loading) {
     return (
-      <View
-        style={[
-          styles.loadingContainer,
-          { backgroundColor: theme.colors.background },
-        ]}
+      <SafeAreaView
+        style={[styles.safeArea, { backgroundColor: theme.colors.background }]}
+        edges={["top", "left", "right"]}
       >
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-        <Paragraph
-          style={[styles.loadingText, { color: theme.colors.onSurfaceVariant }]}
-        >
-          Loading tests...
-        </Paragraph>
-      </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text
+            variant="bodyLarge"
+            style={[
+              styles.loadingText,
+              { color: theme.colors.onSurfaceVariant },
+            ]}
+          >
+            Loading your tests...
+          </Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: theme.colors.background }]}
+      edges={["top", "left", "right"]}
     >
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: theme.colors.surface }]}>
-        <View>
-          <Title
-            style={[styles.welcomeText, { color: theme.colors.onSurface }]}
-          >
-            Test Management
-          </Title>
-          <Paragraph
-            style={[
-              styles.headerSubtitle,
-              { color: theme.colors.onSurfaceVariant },
-            ]}
-          >
-            Manage your question papers and view submissions
-          </Paragraph>
+      <View style={styles.header}>
+        <View style={styles.headerContent}>
+          <View style={styles.headerTextSection}>
+            <Text
+              variant="headlineLarge"
+              style={[styles.headerTitle, { color: theme.colors.onSurface }]}
+            >
+              Your Tests
+            </Text>
+            <Text
+              variant="bodyMedium"
+              style={[
+                styles.headerSubtitle,
+                { color: theme.colors.onSurfaceVariant },
+              ]}
+            >
+              {papers.length} test{papers.length !== 1 ? "s" : ""} created
+            </Text>
+          </View>
         </View>
       </View>
 
-      {/* Papers List */}
+      {/* Tests List */}
       <FlatList
         data={papers}
-        renderItem={renderPaper}
+        renderItem={({ item }) => <TestCard item={item} />}
         keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={styles.listContainer}
         refreshControl={
@@ -252,129 +350,247 @@ export default function TestsScreen() {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Title
+            <View
               style={[
-                styles.emptyTitle,
-                { color: theme.colors.onSurfaceVariant },
+                styles.emptyIconContainer,
+                { backgroundColor: isDarkMode ? "#374151" : "#F3F4F6" },
               ]}
             >
+              <Ionicons
+                name="document-text-outline"
+                size={48}
+                color={theme.colors.onSurfaceVariant}
+              />
+            </View>
+            <Text
+              variant="headlineSmall"
+              style={[styles.emptyTitle, { color: theme.colors.onSurface }]}
+            >
               No Tests Yet
-            </Title>
-            <Paragraph
+            </Text>
+            <Text
+              variant="bodyMedium"
               style={[
                 styles.emptyText,
                 { color: theme.colors.onSurfaceVariant },
               ]}
             >
-              Upload your first question paper to get started
-            </Paragraph>
+              Create your first test by uploading a question paper
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.emptyActionButton,
+                { backgroundColor: theme.colors.primary },
+              ]}
+              onPress={() => router.push("/upload")}
+            >
+              <Ionicons name="add" size={20} color="white" />
+              <Text
+                variant="bodyMedium"
+                style={[styles.emptyActionButtonText, { color: "white" }]}
+              >
+                Upload Test Paper
+              </Text>
+            </TouchableOpacity>
           </View>
         }
+        showsVerticalScrollIndicator={false}
       />
 
       {/* Floating Action Button */}
-      <FAB
-        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
-        icon="plus"
-        label="Upload Paper"
-        onPress={() => router.push("/upload")}
-      />
-    </View>
+      {papers.length > 0 && <QuickUploadFAB />}
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
   container: {
     flex: 1,
   },
   header: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 20,
+  },
+  headerContent: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    padding: 20,
-    elevation: 2,
-    paddingTop: 60, // Account for status bar
   },
-  welcomeText: {
-    fontSize: 24,
-    fontWeight: "bold",
+  headerTextSection: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontWeight: "700",
+    marginBottom: 4,
   },
   headerSubtitle: {
-    marginTop: 4,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  headerIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   listContainer: {
-    padding: 20,
+    paddingHorizontal: 20,
     paddingBottom: 100,
   },
-  paperCard: {
-    marginBottom: 15,
+  testCard: {
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
     elevation: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
-  paperHeader: {
+  cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 8,
+    marginBottom: 16,
   },
-  paperTitle: {
+  cardTitleSection: {
     flex: 1,
+    paddingRight: 12,
+  },
+  cardTitle: {
+    fontWeight: "600",
+    marginBottom: 4,
     fontSize: 18,
-    fontWeight: "bold",
+    lineHeight: 24,
   },
-  chipsContainer: {
+  cardDate: {
+    fontSize: 13,
+  },
+  typeIndicator: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  cardStats: {
     flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 20,
     flexWrap: "wrap",
-    gap: 5,
+    gap: 12,
   },
-  chip: {
-    marginLeft: 5,
-  },
-  chipText: {
-    fontSize: 12,
-  },
-  paperDate: {
-    fontSize: 14,
-    marginBottom: 5,
-  },
-  paperPages: {
-    fontSize: 14,
-    marginBottom: 15,
-    fontStyle: "italic",
-  },
-  paperActions: {
+  statItem: {
     flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 10,
+    alignItems: "center",
+    gap: 4,
+  },
+  statText: {
+    fontSize: 13,
+  },
+  typeChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginLeft: "auto",
+  },
+  typeChipText: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  cardActions: {
+    flexDirection: "row",
+    gap: 12,
   },
   actionButton: {
     flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    gap: 6,
+  },
+  primaryActionButton: {
+    backgroundColor: "#6366F1",
+  },
+  actionButtonText: {
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  fabContainer: {
+    position: "absolute",
+    bottom: 20,
+    right: 20,
   },
   fab: {
-    position: "absolute",
-    margin: 20,
-    right: 0,
-    bottom: 0,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    paddingHorizontal: 20,
   },
   loadingText: {
-    marginTop: 10,
+    marginTop: 16,
+    textAlign: "center",
   },
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingTop: 100,
+    paddingTop: 80,
+    paddingHorizontal: 20,
+  },
+  emptyIconContainer: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 24,
   },
   emptyTitle: {
-    fontSize: 20,
-    marginBottom: 10,
+    fontWeight: "600",
+    marginBottom: 12,
+    textAlign: "center",
   },
   emptyText: {
     textAlign: "center",
-    paddingHorizontal: 40,
+    lineHeight: 22,
+    marginBottom: 32,
+    paddingHorizontal: 20,
+  },
+  emptyActionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 25,
+    gap: 8,
+  },
+  emptyActionButtonText: {
+    fontWeight: "600",
   },
 });
