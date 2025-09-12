@@ -1,15 +1,15 @@
-import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
+import axios from "axios";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
 
 // Get local IP for same WiFi network access
 const getAPIUrl = () => {
-  if (Platform.OS === 'android') {
+  if (Platform.OS === "android") {
     // For Android Expo Go, use your computer's IP address
     // Updated to use your actual local IP address
-    return 'http://10.128.13.32:3000';
+    return "http://10.38.35.222:3000";
   }
-  return 'http://10.128.13.32:3000'; // Use same IP for iOS as well
+  return "http://10.38.35.222:3000"; // Use same IP for iOS as well
 };
 
 const API_BASE_URL = getAPIUrl();
@@ -21,13 +21,17 @@ const api = axios.create({
 
 // Request interceptor to add auth token
 api.interceptors.request.use(async (config) => {
-  const token = await AsyncStorage.getItem('authToken');
+  const token = await AsyncStorage.getItem("authToken");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
     // Debug: Log token presence (first and last 10 characters for security)
-    console.log(`🔑 Using auth token: ${token.substring(0, 10)}...${token.substring(token.length - 10)}`);
+    console.log(
+      `🔑 Using auth token: ${token.substring(0, 10)}...${token.substring(
+        token.length - 10
+      )}`
+    );
   } else {
-    console.log('⚠️ No auth token found in storage');
+    console.log("⚠️ No auth token found in storage");
   }
   return config;
 });
@@ -37,56 +41,56 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     if (error.response?.status === 401) {
-      console.log('🚫 401 Unauthorized - Clearing stored auth data');
+      console.log("🚫 401 Unauthorized - Clearing stored auth data");
       // Handle unauthorized access
-      await AsyncStorage.removeItem('authToken');
-      await AsyncStorage.removeItem('userData');
+      await AsyncStorage.removeItem("authToken");
+      await AsyncStorage.removeItem("userData");
     }
-    
+
     // Log error details for debugging
-    console.log('🔴 API Error:', {
+    console.log("🔴 API Error:", {
       status: error.response?.status,
       message: error.response?.data?.error || error.message,
-      url: error.config?.url
+      url: error.config?.url,
     });
-    
+
     return Promise.reject(error);
   }
 );
 
 export const authService = {
   login: async (username: string, password: string) => {
-    const response = await api.post('/api/auth/login', { username, password });
+    const response = await api.post("/api/auth/login", { username, password });
     return response.data;
   },
-  
+
   verify: async () => {
-    const response = await api.get('/api/auth/verify');
+    const response = await api.get("/api/auth/verify");
     return response.data;
   },
 };
 
 export const paperService = {
   getAll: async () => {
-    const response = await api.get('/api/papers');
+    const response = await api.get("/api/papers");
     return response.data;
   },
-  
+
   getAllPublic: async () => {
-    const response = await api.get('/api/papers/public');
+    const response = await api.get("/api/papers/public");
     return response.data;
   },
-  
+
   upload: async (formData: FormData) => {
-    const response = await api.post('/api/papers/upload', formData, {
+    const response = await api.post("/api/papers/upload", formData, {
       headers: {
-        'Content-Type': 'multipart/form-data',
+        "Content-Type": "multipart/form-data",
       },
       timeout: 60000, // 60 seconds for image upload
     });
     return response.data;
   },
-  
+
   getDetails: async (paperId: string) => {
     const response = await api.get(`/api/papers/${paperId}`);
     return response.data;
@@ -95,22 +99,75 @@ export const paperService = {
 
 export const submissionService = {
   submit: async (formData: FormData) => {
-    const response = await api.post('/api/submissions/submit', formData, {
+    const response = await api.post("/api/submissions/submit", formData, {
       headers: {
-        'Content-Type': 'multipart/form-data',
+        "Content-Type": "multipart/form-data",
       },
       timeout: 60000, // 60 seconds for image upload
     });
     return response.data;
   },
-  
+
   getSubmissions: async (paperId: string) => {
     const response = await api.get(`/api/submissions/paper/${paperId}`);
     return response.data;
   },
-  
+
   getDetails: async (submissionId: string) => {
     const response = await api.get(`/api/submissions/${submissionId}`);
+    return response.data;
+  },
+};
+
+export const questionService = {
+  // Get all questions for a paper
+  getQuestionsByPaper: async (paperId: string) => {
+    const response = await api.get(`/api/questions/paper/${paperId}`);
+    return response.data;
+  },
+
+  // Get a specific question by ID
+  getQuestion: async (questionId: string) => {
+    const response = await api.get(`/api/questions/${questionId}`);
+    return response.data;
+  },
+
+  // Create a new question
+  createQuestion: async (questionData: {
+    paper_id: number;
+    question_number: number;
+    question_text?: string;
+    correct_option: string;
+    page_number?: number;
+    question_type?: string;
+    options?: any;
+  }) => {
+    const response = await api.post("/api/questions", questionData);
+    return response.data;
+  },
+
+  // Update a question
+  updateQuestion: async (
+    questionId: string,
+    questionData: {
+      question_number?: number;
+      question_text?: string;
+      correct_option?: string;
+      page_number?: number;
+      question_type?: string;
+      options?: any;
+    }
+  ) => {
+    const response = await api.put(
+      `/api/questions/${questionId}`,
+      questionData
+    );
+    return response.data;
+  },
+
+  // Delete a question
+  deleteQuestion: async (questionId: string) => {
+    const response = await api.delete(`/api/questions/${questionId}`);
     return response.data;
   },
 };

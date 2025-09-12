@@ -18,10 +18,10 @@ import {
   IconButton,
 } from 'react-native-paper';
 import * as ImagePicker from 'expo-image-picker';
-import { paperService, authService } from '../../services/api';
+import { paperService, authService } from './../services/api';
 import { router } from 'expo-router';
-import { useTheme } from '../../context/ThemeContext';
-import { useAuth } from '../../context/AuthContext';
+import { useTheme } from './../context/ThemeContext';
+import { useAuth } from './../context/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function UploadPaper() {

@@ -1,6 +1,6 @@
-import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../../context/ThemeContext';
+import { Tabs } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../../context/ThemeContext";
 
 export default function TabsLayout() {
   const { theme, isDarkMode } = useTheme();
@@ -15,40 +15,32 @@ export default function TabsLayout() {
           borderTopColor: theme.colors.outline,
         },
         headerShown: false,
-      }}>
+      }}
+    >
       <Tabs.Screen
         name="dashboard"
         options={{
-          title: 'Dashboard',
+          title: "Dashboard",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="upload"
+        name="tests"
         options={{
-          title: 'Upload Paper',
+          title: "Tests",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="cloud-upload" size={size} color={color} />
+            <Ionicons name="document-text" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="student"
         options={{
-          title: 'Student Portal',
+          title: "Student Portal",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="school" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: 'Settings',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="settings" size={size} color={color} />
           ),
         }}
       />

@@ -1,56 +1,108 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   StyleSheet,
-  FlatList,
-  Alert,
+  ScrollView,
   RefreshControl,
-} from 'react-native';
-import {
-  Card,
-  Title,
-  Paragraph,
-  Button,
-  FAB,
-  ActivityIndicator,
-  Chip,
-  Appbar,
-  IconButton,
-} from 'react-native-paper';
-import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
-import { paperService } from '../../services/api';
-import { router } from 'expo-router';
+  SafeAreaView,
+  StatusBar,
+  TouchableOpacity,
+  Dimensions,
+  Alert,
+} from "react-native";
+import { Text, Avatar } from "react-native-paper";
+import { useAuth } from "../../context/AuthContext";
+import { useTheme } from "../../context/ThemeContext";
+import { paperService, submissionService } from "../../services/api";
+import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 
-interface Paper {
-  id: number;
-  name: string;
-  uploaded_at: string;
-  question_count: number;
-  total_pages: number;
-  question_type: string;
+const { width } = Dimensions.get("window");
+
+interface DashboardStats {
+  totalPapers: number;
+  totalSubmissions: number;
+  totalQuestions: number;
+  averageScore: number;
+  recentPapers: Array<{
+    id: number;
+    name: string;
+    uploaded_at: string;
+    question_count: number;
+  }>;
+  recentActivity: Array<{
+    type: "paper_upload" | "submission";
+    title: string;
+    subtitle: string;
+    timestamp: string;
+    icon: string;
+  }>;
 }
 
-export default function Dashboard() {
-  const [papers, setPapers] = useState<Paper[]>([]);
+export default function DashboardScreen() {
+  const [stats, setStats] = useState<DashboardStats>({
+    totalPapers: 0,
+    totalSubmissions: 0,
+    totalQuestions: 0,
+    averageScore: 0,
+    recentPapers: [],
+    recentActivity: [],
+  });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const { logout, user } = useAuth();
-  const { theme, isDarkMode, toggleTheme } = useTheme();
+  const { user } = useAuth();
+  const { theme, isDarkMode } = useTheme();
 
   useEffect(() => {
-    fetchPapers();
+    fetchDashboardData();
   }, []);
 
-  const fetchPapers = async () => {
+  const fetchDashboardData = async () => {
     try {
-      const data = await paperService.getAll();
-      setPapers(data);
-    } catch (error: any) {
-      Alert.alert(
-        'Error',
-        error.response?.data?.error || 'Failed to fetch papers'
+      setLoading(true);
+
+      // Fetch papers data
+      const papersData = await paperService.getAll();
+
+      // Calculate stats
+      const totalPapers = papersData.length;
+      const totalQuestions = papersData.reduce((sum: number, paper: any) => {
+        const questionCount = parseInt(paper.question_count) || 0;
+        return sum + questionCount;
+      }, 0);
+      const recentPapers = papersData
+        .sort(
+          (a: any, b: any) =>
+            new Date(b.uploaded_at).getTime() -
+            new Date(a.uploaded_at).getTime()
+        )
+        .slice(0, 3);
+
+      // Generate recent activity
+      const recentActivity = [
+        ...papersData.slice(0, 2).map((paper: any) => ({
+          type: "paper_upload" as const,
+          title: `Paper "${paper.name}" uploaded`,
+          subtitle: `${paper.question_count || 0} questions`,
+          timestamp: paper.uploaded_at,
+          icon: "document-text",
+        })),
+      ].sort(
+        (a, b) =>
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
       );
+
+      setStats({
+        totalPapers,
+        totalSubmissions: 0, // We'll calculate this when we have submission data
+        totalQuestions,
+        averageScore: 0, // We'll calculate this when we have submission data
+        recentPapers,
+        recentActivity,
+      });
+    } catch (error: any) {
+      console.error("Error fetching dashboard data:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -59,261 +111,621 @@ export default function Dashboard() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchPapers();
-  };
-
-  const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Logout', 
-          onPress: async () => {
-            await logout();
-            router.replace('/login');
-          }
-        },
-      ]
-    );
-  };
-
-  const viewPaperDetails = (paper: Paper) => {
-    router.push({
-      pathname: '/result',
-      params: { 
-        paperId: paper.id,
-        paperName: paper.name,
-        isAdmin: 'true',
-      }
-    });
+    fetchDashboardData();
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    const now = new Date();
+    const date = new Date(dateString);
+    const diffInHours = Math.floor(
+      (now.getTime() - date.getTime()) / (1000 * 60 * 60)
+    );
+
+    if (diffInHours < 1) return "Just now";
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+    if (diffInHours < 48) return "Yesterday";
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
-  const getQuestionTypeInfo = (questionType: string) => {
-    switch (questionType) {
-      case 'omr':
-        return { label: 'OMR', color: '#2196F3', icon: 'circle-outline' };
-      case 'traditional':
-        return { label: 'Traditional', color: '#4CAF50', icon: 'text-box-outline' };
-      case 'mixed':
-        return { label: 'Mixed', color: '#FF9800', icon: 'format-list-bulleted' };
-      default:
-        return { label: 'Traditional', color: '#4CAF50', icon: 'text-box-outline' };
-    }
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good Morning";
+    if (hour < 17) return "Good Afternoon";
+    return "Good Evening";
   };
 
-  const renderPaper = ({ item }: { item: Paper }) => {
-    const questionTypeInfo = getQuestionTypeInfo(item.question_type);
-    
-    return (
-      <Card style={[styles.paperCard, { backgroundColor: theme.colors.surface }]} onPress={() => viewPaperDetails(item)}>
-        <Card.Content>
-          <View style={styles.paperHeader}>
-            <Title style={[styles.paperTitle, { color: theme.colors.onSurface }]}>{item.name}</Title>
-            <View style={styles.chipsContainer}>
-              <Chip 
-                mode="outlined" 
-                textStyle={[styles.chipText, { color: questionTypeInfo.color }]}
-                style={[styles.chip, { borderColor: questionTypeInfo.color }]}
-                icon={questionTypeInfo.icon}
-              >
-                {questionTypeInfo.label}
-              </Chip>
-              <Chip 
-                mode="outlined" 
-                textStyle={[styles.chipText, { color: theme.colors.onSurfaceVariant }]}
-                style={styles.chip}
-              >
-                {item.question_count} Questions
-              </Chip>
-            </View>
+  // Quick Upload Card Component
+  const QuickUploadCard = () => (
+    <TouchableOpacity onPress={() => router.push("/upload")}>
+      <LinearGradient
+        colors={isDarkMode ? ["#6366F1", "#8B5CF6"] : ["#6366F1", "#8B5CF6"]}
+        style={styles.premiumCard}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <View style={styles.premiumContent}>
+          <View style={styles.premiumTextContainer}>
+            <Text variant="headlineSmall" style={styles.premiumTitle}>
+              Quick Upload
+            </Text>
+            <Text variant="bodyMedium" style={styles.premiumSubtitle}>
+              Upload and scan test papers instantly for quick evaluation
+            </Text>
           </View>
-          
-          <Paragraph style={[styles.paperDate, { color: theme.colors.onSurfaceVariant }]}>
-            Uploaded: {formatDate(item.uploaded_at)}
-          </Paragraph>
-          
-          {item.total_pages && item.total_pages > 1 && (
-            <Paragraph style={[styles.paperPages, { color: theme.colors.onSurfaceVariant }]}>
-              📄 {item.total_pages} pages
-            </Paragraph>
-          )}
-          
-          <View style={styles.paperActions}>
-            <Button 
-              mode="outlined" 
-              onPress={() => viewPaperDetails(item)}
-              style={styles.actionButton}
+          <View style={styles.premiumIconContainer}>
+            <LinearGradient
+              colors={["rgba(255,255,255,0.2)", "rgba(255,255,255,0.1)"]}
+              style={styles.premiumIcon}
             >
-              View Submissions
-            </Button>
+              <Ionicons name="cloud-upload" size={24} color="white" />
+            </LinearGradient>
           </View>
-        </Card.Content>
-      </Card>
-    );
-  };
+        </View>
+        <TouchableOpacity
+          style={styles.upgradeButton}
+          onPress={() => router.push("/upload")}
+        >
+          <Text style={styles.upgradeButtonText}>Upload Now</Text>
+          <Ionicons name="arrow-forward" size={16} color="#6366F1" />
+        </TouchableOpacity>
+      </LinearGradient>
+    </TouchableOpacity>
+  );
 
-  if (loading) {
-    return (
-      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-        <Paragraph style={[styles.loadingText, { color: theme.colors.onSurfaceVariant }]}>Loading papers...</Paragraph>
+  // Feature Card Component
+  const FeatureCard = ({
+    title,
+    subtitle,
+    icon,
+    onPress,
+    isLarge = false,
+  }: {
+    title: string;
+    subtitle: string;
+    icon: string;
+    onPress: () => void;
+    isLarge?: boolean;
+  }) => (
+    <TouchableOpacity
+      onPress={onPress}
+      style={[
+        styles.featureCard,
+        { backgroundColor: theme.colors.surface },
+        isLarge ? styles.featureCardLarge : styles.featureCardSmall,
+      ]}
+    >
+      <View style={styles.featureContent}>
+        <View
+          style={[
+            styles.featureIcon,
+            { backgroundColor: isDarkMode ? "#374151" : "#F3F4F6" },
+          ]}
+        >
+          <Ionicons
+            name={icon as any}
+            size={24}
+            color={theme.colors.onSurface}
+          />
+        </View>
+        <Text
+          variant="titleMedium"
+          style={[styles.featureTitle, { color: theme.colors.onSurface }]}
+        >
+          {title}
+        </Text>
+        <Text
+          variant="bodySmall"
+          style={[
+            styles.featureSubtitle,
+            { color: theme.colors.onSurfaceVariant },
+          ]}
+        >
+          {subtitle}
+        </Text>
       </View>
-    );
-  }
+    </TouchableOpacity>
+  );
+
+  // Quick Stats Component
+  const QuickStats = () => (
+    <View style={styles.quickStatsContainer}>
+      <View
+        style={[
+          styles.quickStatCard,
+          { backgroundColor: theme.colors.surface },
+        ]}
+      >
+        <Text
+          variant="headlineMedium"
+          style={[styles.statNumber, { color: theme.colors.onSurface }]}
+        >
+          {stats.totalPapers}
+        </Text>
+        <Text
+          variant="bodySmall"
+          style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}
+        >
+          Total Tests
+        </Text>
+      </View>
+      <View
+        style={[
+          styles.quickStatCard,
+          { backgroundColor: theme.colors.surface },
+        ]}
+      >
+        <Text
+          variant="headlineMedium"
+          style={[styles.statNumber, { color: theme.colors.onSurface }]}
+        >
+          {stats.totalQuestions}
+        </Text>
+        <Text
+          variant="bodySmall"
+          style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}
+        >
+          Questions
+        </Text>
+      </View>
+      <View
+        style={[
+          styles.quickStatCard,
+          { backgroundColor: theme.colors.surface },
+        ]}
+      >
+        <Text
+          variant="headlineMedium"
+          style={[styles.statNumber, { color: theme.colors.onSurface }]}
+        >
+          {stats.totalSubmissions}
+        </Text>
+        <Text
+          variant="bodySmall"
+          style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}
+        >
+          Submissions
+        </Text>
+      </View>
+    </View>
+  );
+
+  // Recent Activity List
+  const RecentActivityList = () => (
+    <View
+      style={[
+        styles.activityListContainer,
+        { backgroundColor: theme.colors.surface },
+      ]}
+    >
+      {stats.recentPapers.map((paper, index) => (
+        <TouchableOpacity
+          key={paper.id}
+          onPress={() =>
+            router.push({
+              pathname: "/questions",
+              params: { paperId: paper.id, paperName: paper.name },
+            })
+          }
+          style={styles.activityListItem}
+        >
+          <View
+            style={[
+              styles.activityItemIcon,
+              { backgroundColor: isDarkMode ? "#374151" : "#F3F4F6" },
+            ]}
+          >
+            <Ionicons
+              name="document-text"
+              size={20}
+              color={theme.colors.onSurface}
+            />
+          </View>
+          <View style={styles.activityItemContent}>
+            <Text
+              variant="bodyMedium"
+              style={[
+                styles.activityItemTitle,
+                { color: theme.colors.onSurface },
+              ]}
+            >
+              {paper.name}
+            </Text>
+            <Text
+              variant="bodySmall"
+              style={[
+                styles.activityItemSubtitle,
+                { color: theme.colors.onSurfaceVariant },
+              ]}
+            >
+              {paper.question_count} questions
+            </Text>
+          </View>
+          <Text
+            variant="bodySmall"
+            style={[
+              styles.activityItemTime,
+              { color: theme.colors.onSurfaceVariant },
+            ]}
+          >
+            {formatDate(paper.uploaded_at)}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: theme.colors.surface }]}>
-        <View>
-          <Title style={[styles.welcomeText, { color: theme.colors.onSurface }]}>Welcome, {user?.username}!</Title>
-          <Paragraph style={[styles.headerSubtitle, { color: theme.colors.onSurfaceVariant }]}>
-            Manage your question papers and view submissions
-          </Paragraph>
-        </View>
-      </View>
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: theme.colors.background }]}
+    >
+      <StatusBar
+        barStyle={isDarkMode ? "light-content" : "dark-content"}
+        backgroundColor={theme.colors.background}
+      />
 
-      {/* Papers List */}
-      <FlatList
-        data={papers}
-        renderItem={renderPaper}
-        keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={styles.listContainer}
+      <ScrollView
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
         refreshControl={
-          <RefreshControl 
-            refreshing={refreshing} 
-            onRefresh={onRefresh} 
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
             colors={[theme.colors.primary]}
             tintColor={theme.colors.primary}
           />
         }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Title style={[styles.emptyTitle, { color: theme.colors.onSurfaceVariant }]}>No Papers Yet</Title>
-            <Paragraph style={[styles.emptyText, { color: theme.colors.onSurfaceVariant }]}>
-              Upload your first question paper to get started
-            </Paragraph>
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerContent}>
+            <View style={styles.userSection}>
+              <Text
+                variant="headlineSmall"
+                style={[styles.greeting, { color: theme.colors.onSurface }]}
+              >
+                Hello,
+              </Text>
+              <Text
+                variant="headlineLarge"
+                style={[styles.username, { color: theme.colors.onSurface }]}
+              >
+                {user?.username || "Admin"}
+              </Text>
+              <Text
+                variant="bodyMedium"
+                style={[
+                  styles.subtitle,
+                  { color: theme.colors.onSurfaceVariant },
+                ]}
+              >
+                Manage your tests and submissions efficiently
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.avatarContainer,
+                { backgroundColor: theme.colors.surface },
+              ]}
+              onPress={() => router.push("/settings")}
+            >
+              <Avatar.Text
+                size={36}
+                label={(user?.username || "AD").substring(0, 2).toUpperCase()}
+                style={{ backgroundColor: theme.colors.primary }}
+              />
+            </TouchableOpacity>
           </View>
-        }
-      />
+        </View>
 
-      {/* Floating Action Button */}
-      <FAB
-        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
-        icon="plus"
-        label="Upload Paper"
-        onPress={() => router.push('/(tabs)/upload')}
-      />
-    </View>
+        {/* Quick Upload Card */}
+        <View style={styles.section}>
+          <QuickUploadCard />
+        </View>
+
+        {/* Quick Stats */}
+        <View style={styles.section}>
+          <QuickStats />
+        </View>
+
+        {/* Features Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text
+              variant="headlineSmall"
+              style={[styles.sectionTitle, { color: theme.colors.onSurface }]}
+            >
+              Features
+            </Text>
+            <TouchableOpacity>
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color={theme.colors.onSurfaceVariant}
+              />
+            </TouchableOpacity>
+          </View>
+
+          {/* Feature Tags */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.featureTags}
+          >
+            <TouchableOpacity
+              style={[styles.featureTag, styles.featureTagActive]}
+            >
+              <Text style={styles.featureTagActiveText}>Upload Test</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.featureTag,
+                { backgroundColor: isDarkMode ? "#374151" : "#F3F4F6" },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.featureTagText,
+                  { color: theme.colors.onSurface },
+                ]}
+              >
+                Analysis
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
+
+          {/* Feature Cards Grid */}
+          <View style={styles.featureGrid}>
+            <FeatureCard
+              title="Upload Test"
+              subtitle="Scan and analyze product ingredients instantly"
+              icon="cloud-upload-outline"
+              onPress={() => router.push("/upload")}
+              isLarge={true}
+            />
+            <FeatureCard
+              title="Analytics"
+              subtitle="Generate personalized analytics routines"
+              icon="bar-chart-outline"
+              onPress={() => router.push("/(tabs)/tests")}
+              isLarge={true}
+            />
+          </View>
+        </View>
+
+        {/* Recent Activity */}
+        {(stats.recentPapers.length > 0 || stats.recentActivity.length > 0) && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text
+                variant="headlineSmall"
+                style={[styles.sectionTitle, { color: theme.colors.onSurface }]}
+              >
+                Recent Activity
+              </Text>
+              <TouchableOpacity onPress={() => router.push("/(tabs)/tests")}>
+                <Text
+                  variant="bodySmall"
+                  style={{ color: theme.colors.primary }}
+                >
+                  See all
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <RecentActivityList />
+          </View>
+        )}
+
+        {/* Bottom Navigation Spacer */}
+        <View style={styles.bottomSpacer} />
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
   container: {
     flex: 1,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    padding: 20,
-    elevation: 2,
-    paddingTop: 60, // Account for status bar
+    paddingHorizontal: 20,
+    paddingTop: 10,
   },
-  welcomeText: {
-    fontSize: 24,
-    fontWeight: 'bold',
+  headerContent: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
   },
-  headerSubtitle: {
-    marginTop: 4,
+  userSection: {
+    flex: 1,
   },
-  logoutButton: {
-    marginTop: 8,
+  greeting: {
+    fontWeight: "400",
+    marginBottom: 4,
   },
-  listContainer: {
-    padding: 20,
-    paddingBottom: 100,
-  },
-  paperCard: {
-    marginBottom: 15,
-    elevation: 3,
-  },
-  paperHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+  username: {
+    fontWeight: "700",
     marginBottom: 8,
   },
-  paperTitle: {
+  subtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  avatarContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  section: {
+    paddingHorizontal: 20,
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontWeight: "600",
+  },
+  premiumCard: {
+    borderRadius: 16,
+    padding: 20,
+    marginTop: 24,
+  },
+  premiumContent: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 20,
+  },
+  premiumTextContainer: {
     flex: 1,
-    fontSize: 18,
-    fontWeight: 'bold',
+    paddingRight: 16,
   },
-  chipsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 5,
+  premiumTitle: {
+    color: "white",
+    fontWeight: "700",
+    marginBottom: 8,
   },
-  chip: {
-    marginLeft: 5,
+  premiumSubtitle: {
+    color: "rgba(255,255,255,0.9)",
+    lineHeight: 20,
   },
-  chipText: {
+  premiumIconContainer: {
+    alignItems: "center",
+  },
+  premiumIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  upgradeButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "white",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+    alignSelf: "flex-start",
+  },
+  upgradeButtonText: {
+    color: "#6366F1",
+    fontWeight: "600",
+    marginRight: 8,
+  },
+  quickStatsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  quickStatCard: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  statNumber: {
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    textAlign: "center",
+  },
+  featureTags: {
+    marginBottom: 16,
+  },
+  featureTag: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  featureTagActive: {
+    backgroundColor: "white",
+  },
+  featureTagActiveText: {
+    color: "#000",
+    fontWeight: "500",
+  },
+  featureTagText: {
+    fontWeight: "500",
+  },
+  featureGrid: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  featureCard: {
+    padding: 20,
+    borderRadius: 16,
+    flex: 1,
+  },
+  featureCardLarge: {
+    minHeight: 140,
+  },
+  featureCardSmall: {
+    minHeight: 120,
+  },
+  featureContent: {
+    flex: 1,
+    justifyContent: "space-between",
+  },
+  featureIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  featureTitle: {
+    fontWeight: "600",
+    marginBottom: 8,
+  },
+  featureSubtitle: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  activityListContainer: {
+    borderRadius: 16,
+    paddingVertical: 8,
+  },
+  activityListItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  activityItemIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  activityItemContent: {
+    flex: 1,
+  },
+  activityItemTitle: {
+    fontWeight: "500",
+    marginBottom: 2,
+  },
+  activityItemSubtitle: {
     fontSize: 12,
   },
-  paperDate: {
-    fontSize: 14,
-    marginBottom: 5,
+  activityItemTime: {
+    fontSize: 12,
   },
-  paperPages: {
-    fontSize: 14,
-    marginBottom: 15,
-    fontStyle: 'italic',
-  },
-  paperActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
-  actionButton: {
-    marginLeft: 10,
-  },
-  fab: {
-    position: 'absolute',
-    margin: 20,
-    right: 0,
-    bottom: 0,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 10,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 100,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    marginBottom: 10,
-  },
-  emptyText: {
-    textAlign: 'center',
-    paddingHorizontal: 40,
+  bottomSpacer: {
+    height: 100,
   },
 });
