@@ -5,23 +5,21 @@ import {
   Alert,
   ScrollView,
   Image,
-  FlatList,
+  TouchableOpacity,
+  Dimensions,
   Text,
 } from "react-native";
-import {
-  TextInput,
-  Button,
-  Card,
-  Title,
-  Paragraph,
-  ActivityIndicator,
-  List,
-  Divider,
-  Chip,
-} from "react-native-paper";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
+import { TextInput, Button, ActivityIndicator, Chip } from "react-native-paper";
+import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { paperService, submissionService } from "../../services/api";
+import { useTheme } from "../../context/ThemeContext";
 import { router } from "expo-router";
+
+const { width } = Dimensions.get("window");
 
 interface Paper {
   id: number;
@@ -38,41 +36,44 @@ export default function StudentSubmissionScreen() {
   const [papers, setPapers] = useState<Paper[]>([]);
   const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null);
   const [selectedImages, setSelectedImages] = useState<any[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [loadingPapers, setLoadingPapers] = useState(true);
+  const [currentStep, setCurrentStep] = useState(1);
+
+  const { theme, isDarkMode } = useTheme();
 
   const getQuestionTypeInfo = (questionType: string) => {
     switch (questionType) {
       case "omr":
         return {
           label: "OMR (Fill Circles)",
-          color: "#2196F3",
-          icon: "circle-outline",
+          color: "#6366F1",
+          icon: "radio-button-off",
           instruction: "Fill the circles completely for your chosen answers",
         };
       case "traditional":
         return {
           label: "Traditional (Mark with ✓)",
-          color: "#4CAF50",
-          icon: "text-box-outline",
+          color: "#10B981",
+          icon: "checkmark-circle-outline",
           instruction: "Mark your chosen answers with ✓ or clear marks",
         };
       case "mixed":
         return {
           label: "Mixed (OMR + Traditional)",
-          color: "#FF9800",
-          icon: "format-list-bulleted",
+          color: "#F59E0B",
+          icon: "list-outline",
           instruction: "Follow the specific format for each question type",
         };
       default:
         return {
           label: "Traditional (Mark with ✓)",
-          color: "#4CAF50",
-          icon: "text-box-outline",
+          color: "#10B981",
+          icon: "checkmark-circle-outline",
           instruction: "Mark your chosen answers with ✓ or clear marks",
         };
     }
   };
-  const [submitting, setSubmitting] = useState(false);
-  const [loadingPapers, setLoadingPapers] = useState(true);
 
   useEffect(() => {
     loadPapers();
@@ -123,6 +124,7 @@ export default function StudentSubmissionScreen() {
 
       if (!result.canceled && result.assets) {
         setSelectedImages(result.assets);
+        if (currentStep < 4) setCurrentStep(4);
       }
     } else {
       // For single-page papers, allow only one image
@@ -135,6 +137,7 @@ export default function StudentSubmissionScreen() {
 
       if (!result.canceled && result.assets[0]) {
         setSelectedImages([result.assets[0]]);
+        if (currentStep < 4) setCurrentStep(4);
       }
     }
   };
@@ -165,6 +168,7 @@ export default function StudentSubmissionScreen() {
         // For single-page, replace existing image
         setSelectedImages([result.assets[0]]);
       }
+      if (currentStep < 4) setCurrentStep(4);
     }
   };
 
@@ -263,6 +267,7 @@ export default function StudentSubmissionScreen() {
               setStudentName("");
               setSelectedPaper(null);
               setSelectedImages([]);
+              setCurrentStep(1);
             },
           },
           {
@@ -293,465 +298,896 @@ export default function StudentSubmissionScreen() {
     });
   };
 
+  const getStepStatus = (step: number) => {
+    if (step === 1) return studentName.trim() ? "completed" : "current";
+    if (step === 2) {
+      return selectedPaper
+        ? "completed"
+        : currentStep >= 2
+        ? "current"
+        : "pending";
+    }
+    if (step === 3) {
+      return selectedImages.length > 0
+        ? "completed"
+        : currentStep >= 3
+        ? "current"
+        : "pending";
+    }
+    if (step === 4) {
+      return currentStep >= 4 ? "current" : "pending";
+    }
+    return "pending";
+  };
+
+  const canSubmit = () => {
+    return (
+      studentName.trim() &&
+      selectedPaper &&
+      selectedImages.length > 0 &&
+      !submitting
+    );
+  };
+
+  const StepIndicator = ({
+    step,
+    title,
+    status,
+  }: {
+    step: number;
+    title: string;
+    status: string;
+  }) => {
+    const getStatusColor = () => {
+      switch (status) {
+        case "completed":
+          return "#10B981";
+        case "current":
+          return "#6366F1";
+        default:
+          return isDarkMode ? "#374151" : "#E5E7EB";
+      }
+    };
+
+    return (
+      <View style={styles.stepContainer}>
+        <View
+          style={[styles.stepIndicator, { backgroundColor: getStatusColor() }]}
+        >
+          {status === "completed" ? (
+            <Ionicons name="checkmark" size={16} color="white" />
+          ) : (
+            <Text
+              style={[
+                styles.stepNumber,
+                {
+                  color:
+                    status === "current"
+                      ? "white"
+                      : isDarkMode
+                      ? "#9CA3AF"
+                      : "#6B7280",
+                },
+              ]}
+            >
+              {step}
+            </Text>
+          )}
+        </View>
+        <Text style={[styles.stepTitle, { color: theme.colors.onSurface }]}>
+          {title}
+        </Text>
+      </View>
+    );
+  };
+
   if (loadingPapers) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" />
-        <Paragraph style={styles.loadingText}>Loading papers...</Paragraph>
+      <View
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
+        <StatusBar
+          style="light"
+          backgroundColor={isDarkMode ? "#1F2937" : "#6366F1"}
+        />
+        <LinearGradient
+          colors={isDarkMode ? ["#1F2937", "#111827"] : ["#6366F1", "#8B5CF6"]}
+          style={styles.loadingGradient}
+        >
+          <ActivityIndicator size="large" color="white" />
+          <Text style={styles.loadingText}>Loading available papers...</Text>
+        </LinearGradient>
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Title style={styles.headerTitle}>Submit Answer Sheet</Title>
-        <Paragraph style={styles.headerSubtitle}>
-          Upload your answer sheet for automatic evaluation
-        </Paragraph>
-        <Button
-          mode="text"
-          onPress={() => router.back()}
-          style={styles.backButton}
+    <View
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
+      <StatusBar
+        style="light"
+        backgroundColor={isDarkMode ? "#1F2937" : "#6366F1"}
+      />
+      {/* Header */}
+      <LinearGradient
+        colors={isDarkMode ? ["#1F2937", "#111827"] : ["#6366F1", "#8B5CF6"]}
+        style={styles.header}
+      >
+        <SafeAreaView edges={["top"]}>
+          <View style={styles.headerContent}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.backButton}
+            >
+              <Ionicons name="arrow-back" size={24} color="white" />
+            </TouchableOpacity>
+            <View style={styles.headerTextContainer}>
+              <Text style={styles.headerTitle}>Answer Sheet Submission</Text>
+              <Text style={styles.headerSubtitle}>
+                Upload and get instant evaluation
+              </Text>
+            </View>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
+
+      {/* Progress Steps */}
+      <View
+        style={[
+          styles.progressContainer,
+          { backgroundColor: theme.colors.surface },
+        ]}
+      >
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.progressScroll}
         >
-          ← Back to Login
-        </Button>
+          <StepIndicator
+            step={1}
+            title="Enter Name"
+            status={getStepStatus(1)}
+          />
+          <StepIndicator
+            step={2}
+            title="Select Paper"
+            status={getStepStatus(2)}
+          />
+          <StepIndicator
+            step={3}
+            title="Upload Image"
+            status={getStepStatus(3)}
+          />
+          <StepIndicator step={4} title="Submit" status={getStepStatus(4)} />
+        </ScrollView>
       </View>
 
-      <View style={styles.content}>
-        {/* Instructions */}
-        <Card style={styles.instructionsCard}>
-          <Card.Content>
-            <Title style={styles.instructionsTitle}>
-              Submission Instructions
-            </Title>
-            <Paragraph style={styles.instructionsText}>
-              • Select the correct question paper{"\n"}• Write your answers
-              clearly on the sheet{"\n"}• Mark your chosen answers with ✓ or
-              circles{"\n"}• Ensure good lighting and clear image{"\n"}• Keep
-              the image straight and readable
-            </Paragraph>
-          </Card.Content>
-        </Card>
-        {/* Student Name */}
-        <Card style={styles.card}>
-          <Card.Content>
-            <Title style={styles.cardTitle}>Step 1: Enter Your Name</Title>
-            <TextInput
-              label="Student Name"
-              value={studentName}
-              onChangeText={setStudentName}
-              style={styles.input}
-              mode="outlined"
-              placeholder="e.g., John Smith"
-              disabled={submitting}
-            />
-          </Card.Content>
-        </Card>
-        {/* Paper Selection */}
-        <Card style={styles.card}>
-          <Card.Content>
-            <Title style={styles.cardTitle}>
-              Step 2: Select Question Paper
-            </Title>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Step 1: Student Name */}
+        <View
+          style={[styles.stepCard, { backgroundColor: theme.colors.surface }]}
+        >
+          <View style={styles.stepHeader}>
+            <View
+              style={[
+                styles.stepIcon,
+                {
+                  backgroundColor:
+                    getStepStatus(1) === "completed" ? "#10B981" : "#6366F1",
+                },
+              ]}
+            >
+              <Ionicons name="person" size={20} color="white" />
+            </View>
+            <Text
+              style={[styles.stepCardTitle, { color: theme.colors.onSurface }]}
+            >
+              Enter Your Name
+            </Text>
+          </View>
+          <TextInput
+            label="Student Name"
+            value={studentName}
+            onChangeText={(text) => {
+              setStudentName(text);
+              if (text.trim() && currentStep < 2) {
+                setCurrentStep(2);
+              }
+              // Don't reset currentStep when name is removed - just disable submit button
+            }}
+            style={styles.textInput}
+            mode="outlined"
+            placeholder="e.g., John Smith"
+            disabled={submitting}
+            theme={{ colors: { primary: "#6366F1" } }}
+          />
+        </View>
+
+        {/* Step 2: Paper Selection */}
+        {currentStep >= 2 && (
+          <View
+            style={[styles.stepCard, { backgroundColor: theme.colors.surface }]}
+          >
+            <View style={styles.stepHeader}>
+              <View
+                style={[
+                  styles.stepIcon,
+                  {
+                    backgroundColor:
+                      getStepStatus(2) === "completed" ? "#10B981" : "#6366F1",
+                  },
+                ]}
+              >
+                <Ionicons name="document-text" size={20} color="white" />
+              </View>
+              <Text
+                style={[
+                  styles.stepCardTitle,
+                  { color: theme.colors.onSurface },
+                ]}
+              >
+                Select Question Paper
+              </Text>
+            </View>
 
             {papers.length === 0 ? (
-              <View style={styles.noPapersContainer}>
-                <Paragraph style={styles.noPapersText}>
-                  No question papers available yet.
-                </Paragraph>
+              <View style={styles.emptyState}>
+                <Ionicons
+                  name="document-outline"
+                  size={48}
+                  color={isDarkMode ? "#6B7280" : "#9CA3AF"}
+                />
+                <Text
+                  style={[
+                    styles.emptyText,
+                    { color: theme.colors.onSurfaceVariant },
+                  ]}
+                >
+                  No question papers available
+                </Text>
+              </View>
+            ) : selectedPaper ? (
+              <View
+                style={[
+                  styles.selectedPaper,
+                  { backgroundColor: isDarkMode ? "#1F2937" : "#F8FAFC" },
+                ]}
+              >
+                <View style={styles.selectedPaperContent}>
+                  <Text
+                    style={[
+                      styles.selectedPaperName,
+                      { color: theme.colors.onSurface },
+                    ]}
+                    numberOfLines={2}
+                  >
+                    {selectedPaper.name}
+                  </Text>
+                  <View style={styles.selectedPaperInfo}>
+                    <View style={styles.metaRow}>
+                      <Chip
+                        mode="outlined"
+                        compact
+                        textStyle={{
+                          color: getQuestionTypeInfo(
+                            selectedPaper.question_type || "traditional"
+                          ).color,
+                          fontSize: 10,
+                        }}
+                        style={[
+                          styles.typeChip,
+                          {
+                            borderColor: getQuestionTypeInfo(
+                              selectedPaper.question_type || "traditional"
+                            ).color,
+                          },
+                        ]}
+                      >
+                        {
+                          getQuestionTypeInfo(
+                            selectedPaper.question_type || "traditional"
+                          ).label
+                        }
+                      </Chip>
+                    </View>
+                    <Text
+                      style={[
+                        styles.paperMeta,
+                        { color: theme.colors.onSurfaceVariant },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {selectedPaper.question_count || 0} questions •{" "}
+                      {selectedPaper.total_pages || 1} page
+                      {(selectedPaper.total_pages || 1) > 1 ? "s" : ""}
+                    </Text>
+                  </View>
+                  <View style={styles.instructionBanner}>
+                    <Ionicons
+                      name="information-circle"
+                      size={14}
+                      color="#6366F1"
+                    />
+                    <Text style={styles.instructionText} numberOfLines={2}>
+                      {
+                        getQuestionTypeInfo(
+                          selectedPaper.question_type || "traditional"
+                        ).instruction
+                      }
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setSelectedPaper(null)}
+                  style={styles.changePaperBtn}
+                  disabled={submitting}
+                >
+                  <Ionicons name="swap-horizontal" size={16} color="#6366F1" />
+                </TouchableOpacity>
               </View>
             ) : (
-              <View>
-                {selectedPaper ? (
-                  <View style={styles.selectedPaperContainer}>
-                    <Card style={styles.selectedPaperCard}>
-                      <Card.Content>
-                        <View style={styles.selectedPaperHeader}>
-                          <Title style={styles.selectedPaperTitle}>
-                            {selectedPaper.name}
-                          </Title>
-                          <View style={styles.selectedChipsContainer}>
-                            <Chip
-                              mode="outlined"
-                              textStyle={{
-                                color: getQuestionTypeInfo(
-                                  selectedPaper.question_type || "traditional"
-                                ).color,
-                                fontSize: 11,
-                              }}
-                              style={{
-                                borderColor: getQuestionTypeInfo(
-                                  selectedPaper.question_type || "traditional"
-                                ).color,
-                                marginBottom: 5,
-                              }}
-                              compact
-                            >
-                              {
-                                getQuestionTypeInfo(
-                                  selectedPaper.question_type || "traditional"
-                                ).label
-                              }
-                            </Chip>
-                            <Chip
-                              mode="outlined"
-                              textStyle={{ fontSize: 11 }}
-                              compact
-                            >
-                              {selectedPaper.question_count || 0} questions •{" "}
-                              {selectedPaper.total_pages || 1} page
-                              {(selectedPaper.total_pages || 1) > 1 ? "s" : ""}
-                            </Chip>
-                          </View>
-                        </View>
-                        <Paragraph style={styles.selectedPaperDate}>
-                          Created: {formatDate(selectedPaper.uploaded_at)}
-                        </Paragraph>
-                        <View
-                          style={[
-                            styles.typeInstructionContainer,
-                            { backgroundColor: "#e8f5e8" },
-                          ]}
-                        >
-                          <Paragraph
-                            style={[
-                              styles.typeInstructionText,
-                              { color: "#2e7d32" },
-                            ]}
-                          >
-                            📝{" "}
-                            {
-                              getQuestionTypeInfo(
-                                selectedPaper.question_type || "traditional"
-                              ).instruction
-                            }
-                          </Paragraph>
-                        </View>
-                        <Button
-                          mode="outlined"
-                          onPress={() => setSelectedPaper(null)}
-                          style={styles.changePaperButton}
-                          disabled={submitting}
-                        >
-                          Change Paper
-                        </Button>
-                      </Card.Content>
-                    </Card>
-                  </View>
-                ) : (
-                  <FlatList
-                    data={papers}
-                    keyExtractor={(item) => item.id.toString()}
-                    renderItem={({ item }) => (
-                      <List.Item
-                        title={item.name}
-                        description={`${
-                          item.question_count || 0
-                        } questions • ${formatDate(item.uploaded_at)}`}
-                        onPress={() => setSelectedPaper(item)}
-                        style={styles.paperItem}
-                        titleStyle={styles.paperItemTitle}
-                        right={() => <List.Icon icon="chevron-right" />}
-                        disabled={submitting}
-                      />
-                    )}
-                    ItemSeparatorComponent={() => <Divider />}
-                    scrollEnabled={false}
-                  />
-                )}
+              <View style={styles.papersList}>
+                {papers.map((paper) => (
+                  <TouchableOpacity
+                    key={paper.id}
+                    style={[
+                      styles.paperItem,
+                      { backgroundColor: isDarkMode ? "#1F2937" : "#F8FAFC" },
+                    ]}
+                    onPress={() => {
+                      setSelectedPaper(paper);
+                      if (currentStep < 3) setCurrentStep(3);
+                    }}
+                    disabled={submitting}
+                  >
+                    <View style={styles.paperItemContent}>
+                      <Text
+                        style={[
+                          styles.paperName,
+                          { color: theme.colors.onSurface },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {paper.name}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.paperDetails,
+                          { color: theme.colors.onSurfaceVariant },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {paper.question_count || 0} questions •{" "}
+                        {formatDate(paper.uploaded_at).split(",")[0]}
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={20}
+                      color="#6366F1"
+                    />
+                  </TouchableOpacity>
+                ))}
               </View>
             )}
-          </Card.Content>
-        </Card>
-        {/* Answer Sheet Upload */}
-        <Card style={styles.card}>
-          <Card.Content>
-            <Title style={styles.cardTitle}>
-              Step 3: Upload Answer Sheet
-              {selectedPaper && selectedPaper.total_pages > 1 ? "s" : ""}
-            </Title>
+          </View>
+        )}
+
+        {/* Step 3: Upload Answer Sheets */}
+        {currentStep >= 3 && (
+          <View
+            style={[styles.stepCard, { backgroundColor: theme.colors.surface }]}
+          >
+            <View style={styles.stepHeader}>
+              <View
+                style={[
+                  styles.stepIcon,
+                  {
+                    backgroundColor:
+                      getStepStatus(3) === "completed" ? "#10B981" : "#6366F1",
+                  },
+                ]}
+              >
+                <Ionicons name="camera" size={20} color="white" />
+              </View>
+              <Text
+                style={[
+                  styles.stepCardTitle,
+                  { color: theme.colors.onSurface },
+                ]}
+              >
+                Upload Answer Sheet
+                {selectedPaper && selectedPaper.total_pages > 1 ? "s" : ""}
+              </Text>
+            </View>
 
             {selectedImages.length > 0 ? (
-              <View style={styles.imageContainer}>
-                <FlatList
-                  data={selectedImages}
-                  keyExtractor={(item, index) => index.toString()}
-                  renderItem={({ item, index }) => (
-                    <View style={styles.imageItem}>
-                      <Paragraph style={styles.pageLabel}>
-                        Page {index + 1}
-                      </Paragraph>
+              <View style={styles.imagesPreview}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  {selectedImages.map((image, index) => (
+                    <View key={index} style={styles.imagePreview}>
                       <Image
-                        source={{ uri: item.uri }}
-                        style={styles.selectedImage}
+                        source={{ uri: image.uri }}
+                        style={styles.previewImage}
                       />
-                      <Paragraph style={styles.imageInfo}>
-                        {item.width}x{item.height}
-                      </Paragraph>
+                      <Text
+                        style={[
+                          styles.pageLabel,
+                          { color: theme.colors.onSurfaceVariant },
+                        ]}
+                      >
+                        Page {index + 1}
+                      </Text>
                     </View>
-                  )}
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                />
-                <Button
-                  mode="outlined"
+                  ))}
+                </ScrollView>
+                <TouchableOpacity
                   onPress={showImagePicker}
-                  style={styles.changeButton}
+                  style={styles.changeImagesBtn}
                   disabled={submitting}
                 >
-                  Change Images
-                </Button>
+                  <Ionicons name="refresh" size={16} color="#6366F1" />
+                  <Text style={styles.changeImagesText}>Change Images</Text>
+                </TouchableOpacity>
               </View>
             ) : (
-              <View style={styles.selectImageContainer}>
-                <Paragraph style={styles.selectImageText}>
-                  No answer sheet
-                  {selectedPaper && selectedPaper.total_pages > 1
-                    ? "s"
-                    : ""}{" "}
-                  selected
-                </Paragraph>
-                {selectedPaper && selectedPaper.total_pages > 1 && (
-                  <Paragraph style={styles.selectHelpText}>
-                    This question paper has {selectedPaper.total_pages} pages.
-                    Please select {selectedPaper.total_pages} images.
-                  </Paragraph>
-                )}
-                <Button
-                  mode="contained"
-                  onPress={showImagePicker}
-                  style={styles.selectButton}
-                  disabled={submitting}
+              <TouchableOpacity
+                style={[
+                  styles.uploadArea,
+                  { borderColor: isDarkMode ? "#374151" : "#E5E7EB" },
+                ]}
+                onPress={showImagePicker}
+                disabled={submitting}
+              >
+                <Ionicons name="cloud-upload" size={48} color="#6366F1" />
+                <Text
+                  style={[
+                    styles.uploadTitle,
+                    { color: theme.colors.onSurface },
+                  ]}
                 >
-                  Select Answer Sheet
-                  {selectedPaper && selectedPaper.total_pages > 1 ? "s" : ""}
-                </Button>
-              </View>
+                  Upload Answer Sheet
+                  {(selectedPaper?.total_pages || 1) > 1 ? "s" : ""}
+                </Text>
+                <Text
+                  style={[
+                    styles.uploadSubtitle,
+                    { color: theme.colors.onSurfaceVariant },
+                  ]}
+                >
+                  {(selectedPaper?.total_pages || 1) > 1
+                    ? `Select ${
+                        selectedPaper?.total_pages || 1
+                      } images for each page`
+                    : "Take a photo or select from gallery"}
+                </Text>
+              </TouchableOpacity>
             )}
-          </Card.Content>
-        </Card>{" "}
-        {/* Submit Button */}
-        <Card style={styles.card}>
-          <Card.Content>
-            <Title style={styles.cardTitle}>
-              Step 4: Submit for Evaluation
-            </Title>
+          </View>
+        )}
 
-            <Button
-              mode="contained"
-              onPress={submitAnswers}
-              style={styles.submitButton}
-              disabled={
-                submitting ||
-                !studentName.trim() ||
-                !selectedPaper ||
-                selectedImages.length === 0
+        {/* Step 4: Submit */}
+        {currentStep >= 4 && (
+          <View
+            style={[styles.stepCard, { backgroundColor: theme.colors.surface }]}
+          >
+            <View style={styles.stepHeader}>
+              <View style={[styles.stepIcon, { backgroundColor: "#6366F1" }]}>
+                <Ionicons name="checkmark-circle" size={20} color="white" />
+              </View>
+              <Text
+                style={[
+                  styles.stepCardTitle,
+                  { color: theme.colors.onSurface },
+                ]}
+              >
+                Review & Submit
+              </Text>
+            </View>
+
+            <View style={styles.reviewSection}>
+              <View style={styles.reviewItem}>
+                <Text
+                  style={[
+                    styles.reviewLabel,
+                    { color: theme.colors.onSurfaceVariant },
+                  ]}
+                >
+                  Student
+                </Text>
+                <Text
+                  style={[
+                    styles.reviewValue,
+                    { color: theme.colors.onSurface },
+                  ]}
+                >
+                  {studentName}
+                </Text>
+              </View>
+              <View style={styles.reviewItem}>
+                <Text
+                  style={[
+                    styles.reviewLabel,
+                    { color: theme.colors.onSurfaceVariant },
+                  ]}
+                >
+                  Paper
+                </Text>
+                <Text
+                  style={[
+                    styles.reviewValue,
+                    { color: theme.colors.onSurface },
+                  ]}
+                >
+                  {selectedPaper?.name}
+                </Text>
+              </View>
+              <View style={styles.reviewItem}>
+                <Text
+                  style={[
+                    styles.reviewLabel,
+                    { color: theme.colors.onSurfaceVariant },
+                  ]}
+                >
+                  Images
+                </Text>
+                <Text
+                  style={[
+                    styles.reviewValue,
+                    { color: theme.colors.onSurface },
+                  ]}
+                >
+                  {selectedImages.length} image
+                  {selectedImages.length > 1 ? "s" : ""} uploaded
+                </Text>
+              </View>
+            </View>
+
+            <LinearGradient
+              colors={
+                !canSubmit() ? ["#9CA3AF", "#6B7280"] : ["#6366F1", "#8B5CF6"]
               }
-              contentStyle={styles.submitButtonContent}
+              style={[
+                styles.submitButton,
+                !canSubmit() && styles.submitButtonDisabled,
+              ]}
             >
-              {submitting ? (
-                <View style={styles.submittingContainer}>
-                  <ActivityIndicator color="white" size="small" />
-                  <Text style={styles.submittingText}>Evaluating...</Text>
-                </View>
-              ) : (
-                "Submit Answer Sheet"
-              )}
-            </Button>
-          </Card.Content>
-        </Card>
-      </View>
-    </ScrollView>
+              <TouchableOpacity
+                onPress={submitAnswers}
+                style={styles.submitButtonContent}
+                disabled={!canSubmit()}
+              >
+                {submitting ? (
+                  <>
+                    <ActivityIndicator size="small" color="white" />
+                    <Text style={styles.submitText}>Processing...</Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons
+                      name="send"
+                      size={20}
+                      color={!canSubmit() ? "#D1D5DB" : "white"}
+                    />
+                    <Text
+                      style={[
+                        styles.submitText,
+                        !canSubmit() && styles.submitTextDisabled,
+                      ]}
+                    >
+                      Submit Answer Sheet
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </LinearGradient>
+          </View>
+        )}
+
+        <View style={styles.bottomSpacing} />
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
   },
-  loadingContainer: {
+  loadingGradient: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f5f5f5",
+    padding: 20,
   },
   loadingText: {
-    marginTop: 10,
-    color: "#666",
+    color: "white",
+    marginTop: 16,
+    fontSize: 16,
+    fontWeight: "500",
   },
   header: {
-    backgroundColor: "white",
-    padding: 20,
-    paddingTop: 60,
-    elevation: 2,
+    paddingTop: 20,
+    paddingBottom: 30,
+    paddingHorizontal: 20,
+  },
+  headerContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 16,
+  },
+  headerTextContainer: {
+    flex: 1,
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: "bold",
-    color: "#333",
+    color: "white",
+    marginBottom: 4,
   },
   headerSubtitle: {
-    color: "#666",
-    marginTop: 4,
+    fontSize: 16,
+    color: "rgba(255,255,255,0.8)",
   },
-  backButton: {
-    alignSelf: "flex-start",
-    marginTop: 10,
-  },
-  content: {
-    padding: 20,
-  },
-  instructionsCard: {
-    marginBottom: 20,
-    backgroundColor: "#e8f5e8",
+  progressContainer: {
+    paddingVertical: 20,
     elevation: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
-  instructionsTitle: {
-    color: "#2e7d32",
-    marginBottom: 10,
+  progressScroll: {
+    paddingHorizontal: 20,
   },
-  instructionsText: {
-    color: "#2e7d32",
-    lineHeight: 20,
-  },
-  card: {
-    marginBottom: 20,
-    elevation: 3,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 15,
-    color: "#333",
-  },
-  input: {
-    marginBottom: 10,
-  },
-  noPapersContainer: {
+  stepContainer: {
     alignItems: "center",
-    paddingVertical: 40,
+    marginRight: 24,
+    minWidth: 80,
   },
-  noPapersText: {
-    color: "#999",
-    textAlign: "center",
-  },
-  selectedPaperContainer: {
-    marginVertical: 10,
-  },
-  selectedPaperCard: {
-    backgroundColor: "#e3f2fd",
-  },
-  selectedPaperHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
+  stepIndicator: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
     marginBottom: 8,
   },
-  selectedPaperTitle: {
-    flex: 1,
-    marginRight: 10,
-    color: "#1976d2",
-  },
-  selectedChipsContainer: {
-    flexDirection: "column",
-    alignItems: "flex-end",
-    gap: 5,
-  },
-  selectedPaperDate: {
-    color: "#1976d2",
-    marginBottom: 15,
-  },
-  typeInstructionContainer: {
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 15,
-  },
-  typeInstructionText: {
+  stepNumber: {
     fontSize: 14,
+    fontWeight: "bold",
+  },
+  stepTitle: {
+    fontSize: 12,
     fontWeight: "500",
     textAlign: "center",
   },
-  changePaperButton: {
-    borderColor: "#1976d2",
+  content: {
+    flex: 1,
+    padding: 20,
+  },
+  stepCard: {
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    elevation: 3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  stepHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  stepIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  stepCardTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    flex: 1,
+  },
+  textInput: {
+    marginTop: 8,
+  },
+  emptyState: {
+    alignItems: "center",
+    padding: 40,
+  },
+  emptyText: {
+    fontSize: 16,
+    marginTop: 12,
+    textAlign: "center",
+  },
+  selectedPaper: {
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#6366F1",
+  },
+  selectedPaperContent: {
+    flex: 1,
+  },
+  selectedPaperName: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 8,
+  },
+  selectedPaperInfo: {
+    marginBottom: 12,
+  },
+  metaRow: {
+    marginBottom: 6,
+  },
+  typeChip: {
+    alignSelf: "flex-start",
+  },
+  paperMeta: {
+    fontSize: 13,
+    marginTop: 4,
+  },
+  instructionBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(99, 102, 241, 0.1)",
+    padding: 12,
+    borderRadius: 8,
+  },
+  instructionText: {
+    fontSize: 12,
+    color: "#6366F1",
+    marginLeft: 6,
+    flex: 1,
+    lineHeight: 16,
+  },
+  changePaperBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  papersList: {
+    marginTop: 12,
   },
   paperItem: {
-    paddingVertical: 12,
-  },
-  paperItemTitle: {
-    fontWeight: "bold",
-  },
-  imageContainer: {
+    flexDirection: "row",
     alignItems: "center",
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
   },
-  imageItem: {
-    width: 120,
-    marginRight: 10,
+  paperItemContent: {
+    flex: 1,
+  },
+  paperName: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  paperDetails: {
+    fontSize: 14,
+  },
+  uploadArea: {
+    borderWidth: 2,
+    borderStyle: "dashed",
+    borderRadius: 12,
+    padding: 40,
     alignItems: "center",
+    marginTop: 12,
+  },
+  uploadTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  uploadSubtitle: {
+    fontSize: 14,
+    textAlign: "center",
+  },
+  imagesPreview: {
+    marginTop: 12,
+  },
+  imagePreview: {
+    alignItems: "center",
+    marginRight: 16,
+    width: 100,
+  },
+  previewImage: {
+    width: 100,
+    height: 130,
+    borderRadius: 8,
+    marginBottom: 8,
   },
   pageLabel: {
     fontSize: 12,
-    fontWeight: "bold",
-    marginBottom: 5,
-    color: "#666",
+    fontWeight: "500",
   },
-  selectedImage: {
-    width: "100%",
-    height: 80,
-    borderRadius: 8,
-    marginBottom: 5,
-    resizeMode: "cover",
-  },
-  imageInfo: {
-    color: "#666",
-    fontSize: 10,
-    textAlign: "center",
-  },
-  changeButton: {
-    marginTop: 15,
-  },
-  selectImageContainer: {
+  changeImagesBtn: {
+    flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 40,
-    borderWidth: 2,
-    borderColor: "#ddd",
-    borderStyle: "dashed",
+    justifyContent: "center",
+    marginTop: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#6366F1",
   },
-  selectImageText: {
-    color: "#999",
-    marginBottom: 15,
+  changeImagesText: {
+    color: "#6366F1",
+    marginLeft: 8,
+    fontWeight: "500",
   },
-  selectHelpText: {
-    color: "#999",
-    marginBottom: 20,
-    textAlign: "center",
+  reviewSection: {
+    marginTop: 12,
+    marginBottom: 24,
+  },
+  reviewItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0,0,0,0.1)",
+  },
+  reviewLabel: {
     fontSize: 14,
+    fontWeight: "500",
   },
-  selectButton: {
-    paddingHorizontal: 20,
-  },
-  submitDescription: {
-    color: "#666",
-    marginBottom: 20,
-    textAlign: "center",
+  reviewValue: {
+    fontSize: 14,
+    fontWeight: "600",
+    flex: 1,
+    textAlign: "right",
   },
   submitButton: {
-    paddingVertical: 8,
-    backgroundColor: "#4caf50",
+    borderRadius: 12,
+    elevation: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  submitButtonDisabled: {
+    elevation: 1,
+    shadowOpacity: 0.1,
+    opacity: 0.7,
   },
   submitButtonContent: {
-    paddingVertical: 8,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
+    paddingHorizontal: 24,
   },
-  submittingContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  submittingText: {
+  submitText: {
     color: "white",
+    fontSize: 16,
+    fontWeight: "600",
     marginLeft: 8,
+  },
+  submitTextDisabled: {
+    color: "#D1D5DB",
+  },
+  bottomSpacing: {
+    height: 40,
   },
 });

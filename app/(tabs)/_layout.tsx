@@ -8,8 +8,10 @@ export default function TabsLayout() {
 
   // Professional colors that blend with the page
   const activeColor = "#6366F1"; // Subtle purple accent
-  const inactiveColor = isDarkMode ? "rgba(255, 255, 255, 0.5)" : "rgba(0, 0, 0, 0.4)";
-  const backgroundColor = isDarkMode 
+  const inactiveColor = isDarkMode
+    ? "rgba(255, 255, 255, 0.5)"
+    : "rgba(0, 0, 0, 0.4)";
+  const backgroundColor = isDarkMode
     ? "#1E1E1E" // Dark theme: solid dark
     : "#FFFFFF"; // Light theme: solid white
 
@@ -51,10 +53,10 @@ export default function TabsLayout() {
           title: "Dashboard",
           tabBarIcon: ({ color, size, focused }) => (
             <View style={{ alignItems: "center" }}>
-              <Ionicons 
-                name={focused ? "analytics" : "analytics-outline"} 
-                size={size + 2} 
-                color={color} 
+              <Ionicons
+                name={focused ? "analytics" : "analytics-outline"}
+                size={size + 2}
+                color={color}
               />
             </View>
           ),
@@ -66,10 +68,10 @@ export default function TabsLayout() {
           title: "Tests",
           tabBarIcon: ({ color, size, focused }) => (
             <View style={{ alignItems: "center" }}>
-              <Ionicons 
-                name={focused ? "library" : "library-outline"} 
-                size={size + 2} 
-                color={color} 
+              <Ionicons
+                name={focused ? "library" : "library-outline"}
+                size={size + 2}
+                color={color}
               />
             </View>
           ),
@@ -81,10 +83,10 @@ export default function TabsLayout() {
           title: "Student Portal",
           tabBarIcon: ({ color, size, focused }) => (
             <View style={{ alignItems: "center" }}>
-              <Ionicons 
-                name={focused ? "people" : "people-outline"} 
-                size={size + 2} 
-                color={color} 
+              <Ionicons
+                name={focused ? "people" : "people-outline"}
+                size={size + 2}
+                color={color}
               />
             </View>
           ),

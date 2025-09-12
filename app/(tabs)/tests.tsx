@@ -134,23 +134,6 @@ export default function TestsScreen() {
     }
   };
 
-  // Quick Upload FAB Component
-  const QuickUploadFAB = () => (
-    <TouchableOpacity
-      style={styles.fabContainer}
-      onPress={() => router.push("/upload")}
-    >
-      <LinearGradient
-        colors={isDarkMode ? ["#6366F1", "#8B5CF6"] : ["#6366F1", "#8B5CF6"]}
-        style={styles.fab}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      >
-        <Ionicons name="add" size={24} color="white" />
-      </LinearGradient>
-    </TouchableOpacity>
-  );
-
   // Test Card Component
   const TestCard = ({ item }: { item: Paper }) => {
     const questionTypeInfo = getQuestionTypeInfo(item.question_type);
@@ -331,6 +314,21 @@ export default function TestsScreen() {
               {papers.length} test{papers.length !== 1 ? "s" : ""} created
             </Text>
           </View>
+          {/* <View style={styles.headerButtonContainer}>
+            <TouchableOpacity
+              style={styles.headerAddButton}
+              onPress={() => router.push("/upload")}
+            >
+              <LinearGradient
+                colors={isDarkMode ? ["#6366F1", "#8B5CF6"] : ["#6366F1", "#8B5CF6"]}
+                style={styles.headerAddButtonGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <Ionicons name="add" size={20} color="white" />
+              </LinearGradient>
+            </TouchableOpacity>
+          </View> */}
         </View>
       </View>
 
@@ -396,9 +394,6 @@ export default function TestsScreen() {
         }
         showsVerticalScrollIndicator={false}
       />
-
-      {/* Floating Action Button */}
-      {papers.length > 0 && <QuickUploadFAB />}
     </SafeAreaView>
   );
 }
@@ -418,7 +413,7 @@ const styles = StyleSheet.create({
   headerContent: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
+    alignItems: "center",
   },
   headerTextSection: {
     flex: 1,
@@ -529,23 +524,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "500",
   },
-  fabContainer: {
-    position: "absolute",
-    bottom: 20,
-    right: 20,
-  },
-  fab: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: "center",
-    alignItems: "center",
-    elevation: 6,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
@@ -592,5 +570,23 @@ const styles = StyleSheet.create({
   },
   emptyActionButtonText: {
     fontWeight: "600",
+  },
+  headerAddButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  headerAddButtonGradient: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  headerButtonContainer: {
+    justifyContent: "center",
+    alignItems: "center",
   },
 });
