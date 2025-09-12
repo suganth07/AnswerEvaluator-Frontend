@@ -35,6 +35,12 @@ function AppContent() {
                 presentation: "modal",
               }}
             />
+            <Stack.Screen
+              name="submission-detail"
+              options={{
+                headerShown: false,
+              }}
+            />
             <Stack.Screen name="(tabs)" />
           </Stack>
         </AuthProvider>

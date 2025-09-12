@@ -64,12 +64,25 @@ export default function DashboardScreen() {
       // Fetch papers data
       const papersData = await paperService.getAll();
 
-      // Calculate stats
+      // Calculate basic stats
       const totalPapers = papersData.length;
       const totalQuestions = papersData.reduce((sum: number, paper: any) => {
         const questionCount = parseInt(paper.question_count) || 0;
         return sum + questionCount;
       }, 0);
+
+      // Fetch submissions for all papers to get total count
+      let totalSubmissions = 0;
+      for (const paper of papersData) {
+        try {
+          const submissions = await submissionService.getByPaperId(paper.id);
+          totalSubmissions += submissions.length;
+        } catch (error) {
+          console.error(`Error fetching submissions for paper ${paper.id}:`, error);
+          // Continue with other papers
+        }
+      }
+
       const recentPapers = papersData
         .sort(
           (a: any, b: any) =>
@@ -94,9 +107,9 @@ export default function DashboardScreen() {
 
       setStats({
         totalPapers,
-        totalSubmissions: 0, // We'll calculate this when we have submission data
+        totalSubmissions,
         totalQuestions,
-        averageScore: 0, // We'll calculate this when we have submission data
+        averageScore: 0, // We can calculate this later if needed
         recentPapers,
         recentActivity,
       });

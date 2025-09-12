@@ -59,6 +59,13 @@ export default function TestsScreen() {
     fetchPapers();
   };
 
+  const viewSubmissions = (paper: Paper) => {
+    router.push({
+      pathname: "/(tabs)/submissions",
+      params: { paperId: paper.id.toString() }
+    });
+  };
+
   const viewPaperDetails = (paper: Paper) => {
     router.push({
       pathname: "/result",
@@ -78,6 +85,32 @@ export default function TestsScreen() {
         paperName: paper.name,
       },
     });
+  };
+
+  const deletePaper = (paper: Paper) => {
+    Alert.alert(
+      "Delete Test",
+      `Are you sure you want to delete "${paper.name}"? This action cannot be undone and will remove all associated questions and submissions.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await paperService.delete(paper.id.toString());
+              Alert.alert("Success", "Test deleted successfully");
+              fetchPapers(); // Refresh the list
+            } catch (error: any) {
+              Alert.alert(
+                "Error",
+                error.response?.data?.error || "Failed to delete test"
+              );
+            }
+          },
+        },
+      ]
+    );
   };
 
   const formatDate = (dateString: string) => {
@@ -122,6 +155,15 @@ export default function TestsScreen() {
             ? "rgba(251, 191, 36, 0.1)"
             : "rgba(245, 158, 11, 0.1)",
         };
+      case "fill_blanks":
+        return {
+          label: "Fill Blanks",
+          color: isDarkMode ? "#A78BFA" : "#8B5CF6",
+          icon: "create" as const,
+          bgColor: isDarkMode
+            ? "rgba(167, 139, 250, 0.1)"
+            : "rgba(139, 92, 246, 0.1)",
+        };
       default:
         return {
           label: "Traditional",
@@ -163,17 +205,28 @@ export default function TestsScreen() {
               {formatDate(item.uploaded_at)}
             </Text>
           </View>
-          <View
-            style={[
-              styles.typeIndicator,
-              { backgroundColor: questionTypeInfo.bgColor },
-            ]}
-          >
-            <Ionicons
-              name={questionTypeInfo.icon}
-              size={20}
-              color={questionTypeInfo.color}
-            />
+          <View style={styles.cardHeaderIcons}>
+            <TouchableOpacity
+              style={[
+                styles.deleteButton,
+                { backgroundColor: isDarkMode ? "#DC2626" : "#EF4444" },
+              ]}
+              onPress={() => deletePaper(item)}
+            >
+              <Ionicons name="trash-outline" size={16} color="white" />
+            </TouchableOpacity>
+            <View
+              style={[
+                styles.typeIndicator,
+                { backgroundColor: questionTypeInfo.bgColor },
+              ]}
+            >
+              <Ionicons
+                name={questionTypeInfo.icon}
+                size={20}
+                color={questionTypeInfo.color}
+              />
+            </View>
           </View>
         </View>
 
@@ -252,7 +305,7 @@ export default function TestsScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionButton, styles.primaryActionButton]}
-            onPress={() => viewPaperDetails(item)}
+            onPress={() => viewSubmissions(item)}
           >
             <Ionicons name="people-outline" size={16} color="white" />
             <Text
@@ -475,6 +528,18 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  cardHeaderIcons: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  deleteButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
   },

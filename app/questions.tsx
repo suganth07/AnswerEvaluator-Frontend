@@ -155,6 +155,12 @@ export default function QuestionsScreen() {
           color: theme.colors.tertiary,
           icon: "format-list-bulleted",
         };
+      case "fill_blanks":
+        return {
+          label: "Fill Blanks",
+          color: "#8B5CF6",
+          icon: "pencil-outline",
+        };
       default:
         return {
           label: "Traditional",

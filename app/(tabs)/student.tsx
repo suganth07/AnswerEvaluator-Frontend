@@ -65,6 +65,13 @@ export default function StudentSubmissionScreen() {
           icon: "list-outline",
           instruction: "Follow the specific format for each question type",
         };
+      case "fill_blanks":
+        return {
+          label: "Fill in the Blanks",
+          color: "#8B5CF6",
+          icon: "create-outline",
+          instruction: "Write your answers clearly in the blank spaces provided",
+        };
       default:
         return {
           label: "Traditional (Mark with ✓)",

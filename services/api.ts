@@ -7,9 +7,9 @@ const getAPIUrl = () => {
   if (Platform.OS === "android") {
     // For Android Expo Go, use your computer's IP address
     // Updated to use your actual local IP address
-    return "http://10.38.35.222:3000";
+    return "http://10.128.13.32:3000";
   }
-  return "http://10.38.35.222:3000"; // Use same IP for iOS as well
+  return "http://10.128.13.32:3000"; // Use same IP for iOS as well
 };
 
 const API_BASE_URL = getAPIUrl();
@@ -95,6 +95,11 @@ export const paperService = {
     const response = await api.get(`/api/papers/${paperId}`);
     return response.data;
   },
+
+  delete: async (paperId: string) => {
+    const response = await api.delete(`/api/papers/${paperId}`);
+    return response.data;
+  },
 };
 
 export const submissionService = {
@@ -105,6 +110,11 @@ export const submissionService = {
       },
       timeout: 60000, // 60 seconds for image upload
     });
+    return response.data;
+  },
+
+  getByPaperId: async (paperId: number) => {
+    const response = await api.get(`/api/submissions/paper/${paperId}`);
     return response.data;
   },
 

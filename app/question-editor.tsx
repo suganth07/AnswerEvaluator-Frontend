@@ -8,6 +8,7 @@ import {
   StatusBar,
   KeyboardAvoidingView,
   Platform,
+  TouchableOpacity,
 } from "react-native";
 import {
   Card,
@@ -25,6 +26,8 @@ import {
 import { useTheme } from "../context/ThemeContext";
 import { questionService } from "../services/api";
 import { router, useLocalSearchParams } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 
 interface QuestionOptions {
   A?: string;
@@ -88,6 +91,7 @@ export default function QuestionEditorScreen() {
     { value: "traditional", label: "Traditional" },
     { value: "omr", label: "OMR" },
     { value: "mixed", label: "Mixed" },
+    { value: "fill_blanks", label: "Fill Blanks" },
   ];
 
   const validateForm = () => {
@@ -115,7 +119,8 @@ export default function QuestionEditorScreen() {
       newErrors.page_number = "Page number must be a positive number";
     }
 
-    if (hasOptions) {
+    // Only validate option matching for question types that use multiple choice options
+    if (hasOptions && (formData.question_type === "omr" || formData.question_type === "traditional" || formData.question_type === "mixed")) {
       const optionKeys = Object.keys(formData.options);
       if (optionKeys.length === 0) {
         newErrors.options =
@@ -221,109 +226,110 @@ export default function QuestionEditorScreen() {
   };
 
   const renderOptionsSection = () => {
-    if (!hasOptions) return null;
+    // Don't show options section for fill-in-the-blanks questions
+    if (!hasOptions || formData.question_type === "fill_blanks") return null;
 
     return (
-      <Card
-        style={[styles.sectionCard, { backgroundColor: theme.colors.surface }]}
-        elevation={2}
+      <View
+        style={[styles.modernCard, { backgroundColor: theme.colors.surface }]}
       >
-        <Card.Content>
-          <View style={styles.sectionHeader}>
-            <Text
-              variant="titleMedium"
-              style={[styles.sectionTitle, { color: theme.colors.onSurface }]}
-            >
-              Answer Options
-            </Text>
-            <Button mode="outlined" onPress={addNewOption} icon="plus" compact>
-              Add Option
-            </Button>
-          </View>
-
-          {errors.options ? (
-            <HelperText type="error" visible={true}>
-              {errors.options}
-            </HelperText>
-          ) : null}
-
-          <Divider
-            style={[
-              styles.sectionDivider,
-              { backgroundColor: theme.colors.outline },
-            ]}
+        <View style={styles.cardHeader}>
+          <Ionicons 
+            name="list" 
+            size={24} 
+            color="#8B5CF6" 
+            style={styles.cardIcon}
           />
+          <Text
+            variant="titleMedium"
+            style={[styles.cardTitle, { color: theme.colors.onSurface }]}
+          >
+            Answer Options
+          </Text>
+          <Button mode="outlined" onPress={addNewOption} icon="plus" compact>
+            Add Option
+          </Button>
+        </View>
 
-          {Object.entries(formData.options).map(([key, value]) => (
-            <View key={key} style={styles.optionRow}>
-              <TextInput
-                label={`Option ${key}`}
-                value={value}
-                onChangeText={(text) => updateOption(key, text)}
-                style={styles.optionInput}
-                mode="outlined"
-                right={
-                  <TextInput.Icon
-                    icon="close"
-                    onPress={() => removeOption(key)}
-                  />
-                }
-              />
-            </View>
-          ))}
+        {errors.options ? (
+          <HelperText type="error" visible={true}>
+            {errors.options}
+          </HelperText>
+        ) : null}
 
-          {Object.keys(formData.options).length === 0 && (
-            <Text
-              variant="bodyMedium"
-              style={[
-                styles.emptyOptions,
-                { color: theme.colors.onSurfaceVariant },
-              ]}
-            >
-              No options added yet. Click "Add Option" to get started.
-            </Text>
-          )}
-        </Card.Content>
-      </Card>
+        {Object.entries(formData.options).map(([key, value]) => (
+          <View key={key} style={styles.optionRow}>
+            <TextInput
+              label={`Option ${key}`}
+              value={value}
+              onChangeText={(text) => updateOption(key, text)}
+              style={styles.optionInput}
+              mode="outlined"
+              right={
+                <TextInput.Icon
+                  icon="close"
+                  onPress={() => removeOption(key)}
+                />
+              }
+            />
+          </View>
+        ))}
+
+        {Object.keys(formData.options).length === 0 && (
+          <Text
+            variant="bodyMedium"
+            style={[
+              styles.emptyOptions,
+              { color: theme.colors.onSurfaceVariant },
+            ]}
+          >
+            No options added yet. Click "Add Option" to get started.
+          </Text>
+        )}
+      </View>
     );
   };
 
   return (
     <SafeAreaView
-      style={[styles.safeArea, { backgroundColor: theme.colors.surface }]}
+      style={[styles.safeArea, { backgroundColor: theme.colors.background }]}
     >
       <StatusBar
         barStyle={isDarkMode ? "light-content" : "dark-content"}
-        backgroundColor={theme.colors.surface}
+        backgroundColor={theme.colors.background}
       />
 
-      {/* Header */}
-      <Surface
-        style={[styles.header, { backgroundColor: theme.colors.surface }]}
-        elevation={2}
+      {/* Modern Header with Gradient */}
+      <LinearGradient
+        colors={isDarkMode ? ["#1F2937", "#111827"] : ["#6366F1", "#8B5CF6"]}
+        style={styles.headerGradient}
       >
-        <Appbar.Header style={styles.appbarHeader}>
-          <Appbar.BackAction
-            onPress={() => router.back()}
-            iconColor={theme.colors.onSurface}
-          />
-          <Appbar.Content
-            title={mode === "add" ? "Add Question" : "Edit Question"}
-            subtitle={paperName}
-            titleStyle={[styles.headerTitle, { color: theme.colors.onSurface }]}
-            subtitleStyle={[
-              styles.headerSubtitle,
-              { color: theme.colors.onSurfaceVariant },
-            ]}
-          />
-          <Appbar.Action
-            icon="content-save"
-            onPress={handleSave}
-            disabled={loading}
-            iconColor={theme.colors.primary}
-          />
-        </Appbar.Header>
-      </Surface>
+        <View style={styles.headerContent}>
+          <View style={styles.headerTop}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => router.back()}
+            >
+              <Ionicons name="arrow-back" size={24} color="white" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={handleSave}
+              disabled={loading}
+            >
+              <Ionicons name="checkmark" size={20} color="white" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.headerInfo}>
+            <Text variant="headlineMedium" style={styles.modernHeaderTitle}>
+              {mode === "add" ? "Add Question" : "Edit Question"}
+            </Text>
+            <Text variant="bodyMedium" style={styles.modernHeaderSubtitle}>
+              {paperName}
+            </Text>
+          </View>
+        </View>
+      </LinearGradient>
 
       <KeyboardAvoidingView
         style={styles.container}
@@ -338,26 +344,26 @@ export default function QuestionEditorScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* Basic Information */}
-          <Card
+          <View
             style={[
-              styles.sectionCard,
+              styles.modernCard,
               { backgroundColor: theme.colors.surface },
             ]}
-            elevation={2}
           >
-            <Card.Content>
+            <View style={styles.cardHeader}>
+              <Ionicons 
+                name="information-circle" 
+                size={24} 
+                color={theme.colors.primary} 
+                style={styles.cardIcon}
+              />
               <Text
                 variant="titleMedium"
-                style={[styles.sectionTitle, { color: theme.colors.onSurface }]}
+                style={[styles.cardTitle, { color: theme.colors.onSurface }]}
               >
                 Basic Information
               </Text>
-              <Divider
-                style={[
-                  styles.sectionDivider,
-                  { backgroundColor: theme.colors.outline },
-                ]}
-              />
+            </View>
 
               <View style={styles.formRow}>
                 <TextInput
@@ -393,173 +399,187 @@ export default function QuestionEditorScreen() {
                   {errors.page_number}
                 </HelperText>
               ) : null}
-            </Card.Content>
-          </Card>
 
-          {/* Question Type */}
-          <Card
-            style={[
-              styles.sectionCard,
-              { backgroundColor: theme.colors.surface },
-            ]}
-            elevation={2}
-          >
-            <Card.Content>
-              <Text
-                variant="titleMedium"
-                style={[styles.sectionTitle, { color: theme.colors.onSurface }]}
-              >
-                Question Type
-              </Text>
-              <Divider
-                style={[
-                  styles.sectionDivider,
-                  { backgroundColor: theme.colors.outline },
-                ]}
-              />
-
-              <SegmentedButtons
-                value={formData.question_type}
-                onValueChange={(value) =>
-                  updateFormData("question_type", value)
-                }
-                buttons={questionTypes}
-                style={styles.segmentedButtons}
-              />
-            </Card.Content>
-          </Card>
+              {/* Question Type Indicator */}
+              <View style={styles.questionTypeIndicator}>
+                <Text variant="bodyMedium" style={[styles.questionTypeLabel, { color: theme.colors.onSurface }]}>
+                  Question Type:
+                </Text>
+                <View style={[styles.questionTypeChip, { backgroundColor: theme.colors.primary }]}>
+                  <Text variant="bodyMedium" style={[styles.questionTypeText, { color: theme.colors.onPrimary }]}>
+                    {questionTypes.find(type => type.value === formData.question_type)?.label || "Traditional"}
+                  </Text>
+                </View>
+              </View>
+              <HelperText type="info" visible={true}>
+                {formData.question_type === "omr" && "OMR: Uses bubble recognition for multiple choice answers"}
+                {formData.question_type === "traditional" && "Traditional: Uses text recognition for handwritten answers"}
+                {formData.question_type === "mixed" && "Mixed: Combines both OMR bubbles and handwritten text recognition"}
+                {formData.question_type === "fill_blanks" && "Fill Blanks: Uses AI to evaluate fill-in-the-blank style answers"}
+              </HelperText>
+          </View>
 
           {/* Question Text */}
-          <Card
+          <View
             style={[
-              styles.sectionCard,
+              styles.modernCard,
               { backgroundColor: theme.colors.surface },
             ]}
-            elevation={2}
           >
-            <Card.Content>
+            <View style={styles.cardHeader}>
+              <Ionicons 
+                name="document-text" 
+                size={24} 
+                color={theme.colors.secondary} 
+                style={styles.cardIcon}
+              />
               <Text
                 variant="titleMedium"
-                style={[styles.sectionTitle, { color: theme.colors.onSurface }]}
+                style={[styles.cardTitle, { color: theme.colors.onSurface }]}
               >
                 Question Text
               </Text>
-              <Divider
-                style={[
-                  styles.sectionDivider,
-                  { backgroundColor: theme.colors.outline },
-                ]}
-              />
+            </View>
 
-              <TextInput
-                label="Question Text (Optional)"
-                value={formData.question_text}
-                onChangeText={(text) => updateFormData("question_text", text)}
-                mode="outlined"
-                multiline
-                numberOfLines={4}
-                placeholder="Enter the question text here..."
-                style={styles.textArea}
-              />
-            </Card.Content>
-          </Card>
+            <TextInput
+              label="Question Text (Optional)"
+              value={formData.question_text}
+              onChangeText={(text) => updateFormData("question_text", text)}
+              mode="outlined"
+              multiline
+              numberOfLines={4}
+              placeholder="Enter the question text here..."
+              style={styles.textArea}
+            />
+          </View>
 
           {/* Correct Answer & Options */}
-          <Card
+          <View
             style={[
-              styles.sectionCard,
+              styles.modernCard,
               { backgroundColor: theme.colors.surface },
             ]}
-            elevation={2}
           >
-            <Card.Content>
-              <View style={styles.sectionHeader}>
-                <Text
-                  variant="titleMedium"
-                  style={[
-                    styles.sectionTitle,
-                    { color: theme.colors.onSurface },
-                  ]}
-                >
-                  Answer Configuration
-                </Text>
-                <View style={styles.switchContainer}>
-                  <Text
-                    variant="bodyMedium"
-                    style={{ color: theme.colors.onSurface }}
-                  >
-                    Has Options
-                  </Text>
-                  <Switch
-                    value={hasOptions}
-                    onValueChange={setHasOptions}
-                    color={theme.colors.primary}
-                  />
-                </View>
-              </View>
-
-              <Divider
-                style={[
-                  styles.sectionDivider,
-                  { backgroundColor: theme.colors.outline },
-                ]}
+            <View style={styles.cardHeader}>
+              <Ionicons 
+                name="checkmark-circle" 
+                size={24} 
+                color={theme.colors.tertiary} 
+                style={styles.cardIcon}
               />
+              <Text
+                variant="titleMedium"
+                style={[styles.cardTitle, { color: theme.colors.onSurface }]}
+              >
+                Answer Configuration
+              </Text>
+            </View>
 
-              <TextInput
-                label="Correct Answer *"
-                value={formData.correct_option}
-                onChangeText={(text) =>
-                  updateFormData("correct_option", text.toUpperCase())
-                }
-                mode="outlined"
-                placeholder={
-                  hasOptions ? "A, B, C, D..." : "Enter correct answer"
-                }
-                style={styles.input}
-                error={!!errors.correct_option}
+            {/* Has Options Toggle - Make it more visible */}
+            <View style={styles.optionsToggleContainer}>
+              <Text
+                variant="bodyLarge"
+                style={[styles.optionsToggleLabel, { color: theme.colors.onSurface }]}
+              >
+                Has Options
+              </Text>
+              <Switch
+                value={hasOptions}
+                onValueChange={formData.question_type === "fill_blanks" ? undefined : setHasOptions}
+                color={theme.colors.primary}
+                disabled={formData.question_type === "fill_blanks"}
               />
+            </View>
+            <HelperText type="info" visible={true} style={styles.optionsToggleHelper}>
+              {formData.question_type === "fill_blanks" 
+                ? "Fill-in-the-blanks questions don't use multiple choice options"
+                : hasOptions 
+                  ? "Enable to add multiple choice options (A, B, C, D...)"
+                  : "Disable for open-ended or text-based answers"
+              }
+            </HelperText>
 
-              {errors.correct_option ? (
-                <HelperText type="error" visible={true}>
-                  {errors.correct_option}
-                </HelperText>
-              ) : null}
-            </Card.Content>
-          </Card>
+            <TextInput
+              label="Correct Answer *"
+              value={formData.correct_option}
+              onChangeText={(text) =>
+                updateFormData("correct_option", 
+                  formData.question_type === "fill_blanks" ? text : text.toUpperCase()
+                )
+              }
+              mode="outlined"
+              placeholder={
+                formData.question_type === "fill_blanks" 
+                  ? "Enter expected answer text" 
+                  : hasOptions 
+                    ? "A, B, C, D..." 
+                    : "Enter correct answer"
+              }
+              style={styles.input}
+              error={!!errors.correct_option}
+            />
+
+            <HelperText type={errors.correct_option ? "error" : "info"} visible={true}>
+              {errors.correct_option || 
+                (formData.question_type === "fill_blanks"
+                  ? "For fill-in-the-blanks, enter the expected answer text"
+                  : hasOptions
+                    ? "Select the letter that corresponds to the correct option"
+                    : "Enter the correct answer")
+              }
+            </HelperText>
+          </View>
 
           {/* Options Section */}
           {renderOptionsSection()}
 
           {/* Action Buttons */}
-          <Card
-            style={[
-              styles.sectionCard,
-              { backgroundColor: theme.colors.surface },
-            ]}
-            elevation={2}
-          >
-            <Card.Content>
-              <View style={styles.actionButtons}>
-                <Button
-                  mode="outlined"
-                  onPress={() => router.back()}
-                  style={styles.cancelButton}
-                  disabled={loading}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  mode="contained"
-                  onPress={handleSave}
-                  loading={loading}
-                  style={styles.saveButton}
-                  icon="content-save"
-                >
+          <View style={styles.actionButtonsContainer}>
+            <TouchableOpacity
+              style={[
+                styles.modernActionButton,
+                styles.cancelActionButton,
+                { backgroundColor: isDarkMode ? "#374151" : "#F3F4F6" },
+              ]}
+              onPress={() => router.back()}
+              disabled={loading}
+            >
+              <Ionicons 
+                name="close" 
+                size={20} 
+                color={theme.colors.onSurface} 
+                style={{ marginRight: 8 }}
+              />
+              <Text style={[styles.actionButtonText, { color: theme.colors.onSurface }]}>
+                Cancel
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.modernActionButton,
+                styles.saveActionButton,
+              ]}
+              onPress={handleSave}
+              disabled={loading}
+            >
+              <LinearGradient
+                colors={["#6366F1", "#8B5CF6"]}
+                style={styles.actionButtonGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <Ionicons 
+                  name="checkmark" 
+                  size={20} 
+                  color="white" 
+                  style={{ marginRight: 8 }}
+                />
+                <Text style={[styles.actionButtonText, { color: "white" }]}>
                   {mode === "add" ? "Create" : "Update"}
-                </Button>
-              </View>
-            </Card.Content>
-          </Card>
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
 
           {/* Bottom Spacing */}
           <View style={styles.bottomSpacing} />
@@ -647,6 +667,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
+  optionsToggleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  optionsToggleLabel: {
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  optionsToggleHelper: {
+    marginTop: -8,
+    marginBottom: 16,
+  },
   optionRow: {
     marginBottom: 8,
   },
@@ -666,10 +702,140 @@ const styles = StyleSheet.create({
   cancelButton: {
     flex: 1,
   },
-  saveButton: {
+  saveButtonOld: {
     flex: 1,
   },
   bottomSpacing: {
     height: 40,
+  },
+  questionTypeIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(0,0,0,0.1)",
+  },
+  questionTypeLabel: {
+    fontWeight: "500",
+  },
+  questionTypeChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  questionTypeText: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  headerGradient: {
+    paddingTop: 12,
+    paddingBottom: 24,
+    paddingHorizontal: 20,
+  },
+  headerContent: {
+    flex: 1,
+  },
+  headerTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  saveButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  headerInfo: {
+    alignItems: "flex-start",
+  },
+  headerTitleOld: {
+    color: "white",
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  headerSubtitleOld: {
+    color: "rgba(255,255,255,0.8)",
+    fontSize: 14,
+  },
+  modernHeaderTitle: {
+    color: "white",
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  modernHeaderSubtitle: {
+    color: "rgba(255,255,255,0.8)",
+    fontSize: 14,
+  },
+  modernCard: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  cardIcon: {
+    marginRight: 12,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+  },
+  actionButtonsContainer: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 20,
+    paddingHorizontal: 20,
+  },
+  modernActionButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
+    borderRadius: 12,
+  },
+  cancelActionButton: {
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.1)",
+  },
+  saveActionButton: {
+    overflow: "hidden",
+  },
+  actionButtonGradient: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
+  },
+  actionButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
   },
 });
