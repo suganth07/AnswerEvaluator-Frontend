@@ -27,6 +27,8 @@ interface Paper {
   name: string;
   uploaded_at: string;
   question_count: number;
+  total_pages: number;
+  question_type: string;
 }
 
 export default function Dashboard() {
@@ -98,36 +100,69 @@ export default function Dashboard() {
     });
   };
 
-  const renderPaper = ({ item }: { item: Paper }) => (
-    <Card style={[styles.paperCard, { backgroundColor: theme.colors.surface }]} onPress={() => viewPaperDetails(item)}>
-      <Card.Content>
-        <View style={styles.paperHeader}>
-          <Title style={[styles.paperTitle, { color: theme.colors.onSurface }]}>{item.name}</Title>
-          <Chip 
-            mode="outlined" 
-            textStyle={[styles.chipText, { color: theme.colors.onSurfaceVariant }]}
-            style={styles.chip}
-          >
-            {item.question_count} Questions
-          </Chip>
-        </View>
-        
-        <Paragraph style={[styles.paperDate, { color: theme.colors.onSurfaceVariant }]}>
-          Uploaded: {formatDate(item.uploaded_at)}
-        </Paragraph>
-        
-        <View style={styles.paperActions}>
-          <Button 
-            mode="outlined" 
-            onPress={() => viewPaperDetails(item)}
-            style={styles.actionButton}
-          >
-            View Submissions
-          </Button>
-        </View>
-      </Card.Content>
-    </Card>
-  );
+  const getQuestionTypeInfo = (questionType: string) => {
+    switch (questionType) {
+      case 'omr':
+        return { label: 'OMR', color: '#2196F3', icon: 'circle-outline' };
+      case 'traditional':
+        return { label: 'Traditional', color: '#4CAF50', icon: 'text-box-outline' };
+      case 'mixed':
+        return { label: 'Mixed', color: '#FF9800', icon: 'format-list-bulleted' };
+      default:
+        return { label: 'Traditional', color: '#4CAF50', icon: 'text-box-outline' };
+    }
+  };
+
+  const renderPaper = ({ item }: { item: Paper }) => {
+    const questionTypeInfo = getQuestionTypeInfo(item.question_type);
+    
+    return (
+      <Card style={[styles.paperCard, { backgroundColor: theme.colors.surface }]} onPress={() => viewPaperDetails(item)}>
+        <Card.Content>
+          <View style={styles.paperHeader}>
+            <Title style={[styles.paperTitle, { color: theme.colors.onSurface }]}>{item.name}</Title>
+            <View style={styles.chipsContainer}>
+              <Chip 
+                mode="outlined" 
+                textStyle={[styles.chipText, { color: questionTypeInfo.color }]}
+                style={[styles.chip, { borderColor: questionTypeInfo.color }]}
+                icon={questionTypeInfo.icon}
+              >
+                {questionTypeInfo.label}
+              </Chip>
+              <Chip 
+                mode="outlined" 
+                textStyle={[styles.chipText, { color: theme.colors.onSurfaceVariant }]}
+                style={styles.chip}
+              >
+                {item.question_count} Questions
+              </Chip>
+            </View>
+          </View>
+          
+          <Paragraph style={[styles.paperDate, { color: theme.colors.onSurfaceVariant }]}>
+            Uploaded: {formatDate(item.uploaded_at)}
+          </Paragraph>
+          
+          {item.total_pages && item.total_pages > 1 && (
+            <Paragraph style={[styles.paperPages, { color: theme.colors.onSurfaceVariant }]}>
+              📄 {item.total_pages} pages
+            </Paragraph>
+          )}
+          
+          <View style={styles.paperActions}>
+            <Button 
+              mode="outlined" 
+              onPress={() => viewPaperDetails(item)}
+              style={styles.actionButton}
+            >
+              View Submissions
+            </Button>
+          </View>
+        </Card.Content>
+      </Card>
+    );
+  };
 
   if (loading) {
     return (
@@ -226,15 +261,25 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
+  chipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 5,
+  },
   chip: {
-    marginLeft: 10,
+    marginLeft: 5,
   },
   chipText: {
     fontSize: 12,
   },
   paperDate: {
     fontSize: 14,
+    marginBottom: 5,
+  },
+  paperPages: {
+    fontSize: 14,
     marginBottom: 15,
+    fontStyle: 'italic',
   },
   paperActions: {
     flexDirection: 'row',

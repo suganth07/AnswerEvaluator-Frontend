@@ -6,6 +6,7 @@ import {
   ScrollView,
   Image,
   FlatList,
+  Text,
 } from 'react-native';
 import {
   TextInput,
@@ -27,6 +28,8 @@ interface Paper {
   name: string;
   uploaded_at: string;
   question_count: number;
+  total_pages: number;
+  question_type: string;
   questions?: any[];
 }
 
@@ -34,13 +37,51 @@ export default function StudentSubmissionScreen() {
   const [studentName, setStudentName] = useState('');
   const [papers, setPapers] = useState<Paper[]>([]);
   const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null);
-  const [selectedImage, setSelectedImage] = useState<any>(null);
+  const [selectedImages, setSelectedImages] = useState<any[]>([]);
+
+  const getQuestionTypeInfo = (questionType: string) => {
+    switch (questionType) {
+      case 'omr':
+        return { 
+          label: 'OMR (Fill Circles)', 
+          color: '#2196F3', 
+          icon: 'circle-outline',
+          instruction: 'Fill the circles completely for your chosen answers'
+        };
+      case 'traditional':
+        return { 
+          label: 'Traditional (Mark with ✓)', 
+          color: '#4CAF50', 
+          icon: 'text-box-outline',
+          instruction: 'Mark your chosen answers with ✓ or clear marks'
+        };
+      case 'mixed':
+        return { 
+          label: 'Mixed (OMR + Traditional)', 
+          color: '#FF9800', 
+          icon: 'format-list-bulleted',
+          instruction: 'Follow the specific format for each question type'
+        };
+      default:
+        return { 
+          label: 'Traditional (Mark with ✓)', 
+          color: '#4CAF50', 
+          icon: 'text-box-outline',
+          instruction: 'Mark your chosen answers with ✓ or clear marks'
+        };
+    }
+  };
   const [submitting, setSubmitting] = useState(false);
   const [loadingPapers, setLoadingPapers] = useState(true);
 
   useEffect(() => {
     loadPapers();
   }, []);
+
+  // Reset images when paper selection changes
+  useEffect(() => {
+    setSelectedImages([]);
+  }, [selectedPaper]);
 
   const loadPapers = async () => {
     try {
@@ -55,22 +96,40 @@ export default function StudentSubmissionScreen() {
     }
   };
 
-  const selectImage = async () => {
+  const selectImages = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Permission needed', 'Sorry, we need camera roll permissions to make this work!');
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [3, 4],
-      quality: 0.8,
-    });
+    const isMultiPage = selectedPaper && selectedPaper.total_pages > 1;
+    
+    if (isMultiPage) {
+      // For multi-page papers, allow multiple selection
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        selectionLimit: selectedPaper.total_pages,
+        allowsEditing: false,
+        quality: 0.8,
+      });
 
-    if (!result.canceled && result.assets[0]) {
-      setSelectedImage(result.assets[0]);
+      if (!result.canceled && result.assets) {
+        setSelectedImages(result.assets);
+      }
+    } else {
+      // For single-page papers, allow only one image
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [3, 4],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setSelectedImages([result.assets[0]]);
+      }
     }
   };
 
@@ -88,17 +147,30 @@ export default function StudentSubmissionScreen() {
     });
 
     if (!result.canceled && result.assets[0]) {
-      setSelectedImage(result.assets[0]);
+      const isMultiPage = selectedPaper && selectedPaper.total_pages > 1;
+      
+      if (isMultiPage) {
+        // For multi-page, add to existing images
+        setSelectedImages(prev => [...prev, result.assets[0]]);
+      } else {
+        // For single-page, replace existing image
+        setSelectedImages([result.assets[0]]);
+      }
     }
   };
 
   const showImagePicker = () => {
+    const isMultiPage = selectedPaper && selectedPaper.total_pages > 1;
+    const maxPages = selectedPaper?.total_pages || 1;
+    
     Alert.alert(
-      'Select Image',
-      'Choose how you want to select your answer sheet',
+      'Select Answer Sheet',
+      isMultiPage 
+        ? `This question paper has ${maxPages} pages. You can select multiple images.`
+        : 'Choose how you want to select your answer sheet',
       [
-        { text: 'Camera', onPress: takePhoto },
-        { text: 'Gallery', onPress: selectImage },
+        { text: 'Take Photo', onPress: takePhoto },
+        { text: isMultiPage ? 'Select Multiple' : 'Gallery', onPress: selectImages },
         { text: 'Cancel', style: 'cancel' },
       ]
     );
@@ -115,8 +187,19 @@ export default function StudentSubmissionScreen() {
       return;
     }
 
-    if (!selectedImage) {
-      Alert.alert('Error', 'Please select your answer sheet image');
+    if (selectedImages.length === 0) {
+      Alert.alert('Error', 'Please select your answer sheet image(s)');
+      return;
+    }
+
+    // Validate page count for multi-page papers
+    const isMultiPage = selectedPaper.total_pages > 1;
+    if (isMultiPage && selectedImages.length !== selectedPaper.total_pages) {
+      Alert.alert(
+        'Page Count Mismatch',
+        `This question paper has ${selectedPaper.total_pages} pages, but you selected ${selectedImages.length} image(s). Please select exactly ${selectedPaper.total_pages} images - one for each page.`,
+        [{ text: 'OK' }]
+      );
       return;
     }
 
@@ -126,26 +209,40 @@ export default function StudentSubmissionScreen() {
       formData.append('studentName', studentName.trim());
       formData.append('paperId', selectedPaper.id.toString());
       
-      const imageFile = {
-        uri: selectedImage.uri,
-        type: 'image/jpeg',
-        name: 'answer-sheet.jpg',
-      } as any;
-      
-      formData.append('answerSheet', imageFile);
+      if (isMultiPage) {
+        // For multi-page papers, append multiple files
+        selectedImages.forEach((image, index) => {
+          const imageFile = {
+            uri: image.uri,
+            type: 'image/jpeg',
+            name: `answer-sheet-page-${index + 1}.jpg`,
+          } as any;
+          
+          formData.append('answerSheets', imageFile);
+        });
+      } else {
+        // For single-page papers, append single file
+        const imageFile = {
+          uri: selectedImages[0].uri,
+          type: 'image/jpeg',
+          name: 'answer-sheet.jpg',
+        } as any;
+        
+        formData.append('answerSheet', imageFile);
+      }
 
       const response = await submissionService.submit(formData);
       
       Alert.alert(
         'Submission Complete!',
-        `Your answer sheet has been submitted and stored successfully!\n\nStudent: ${response.studentName}\nPaper: ${response.paperName}\nScore: ${response.score} (${response.percentage})\n\n${response.driveInfo?.uploadedToDrive ? '✓ Stored in Google Drive' : '⚠ Drive upload failed'}`,
+        `Your answer sheet has been submitted and stored successfully!\n\nStudent: ${response.studentName}\nPaper: ${response.paperName}\nEvaluation: ${response.evaluationMethod || 'Auto-detected'}\n\n${response.driveInfo?.uploadedToDrive ? '✓ Stored in Google Drive' : '⚠ Drive upload failed'}`,
         [
           {
             text: 'Submit Another',
             onPress: () => {
               setStudentName('');
               setSelectedPaper(null);
-              setSelectedImage(null);
+              setSelectedImages([]);
             },
           },
           {
@@ -253,13 +350,28 @@ export default function StudentSubmissionScreen() {
                           <Title style={styles.selectedPaperTitle}>
                             {selectedPaper.name}
                           </Title>
-                          <Chip mode="outlined">
-                            {selectedPaper.question_count || 0} questions
-                          </Chip>
+                          <View style={styles.selectedChipsContainer}>
+                            <Chip 
+                              mode="outlined" 
+                              textStyle={{ color: getQuestionTypeInfo(selectedPaper.question_type || 'traditional').color, fontSize: 11 }}
+                              style={{ borderColor: getQuestionTypeInfo(selectedPaper.question_type || 'traditional').color, marginBottom: 5 }}
+                              compact
+                            >
+                              {getQuestionTypeInfo(selectedPaper.question_type || 'traditional').label}
+                            </Chip>
+                            <Chip mode="outlined" textStyle={{ fontSize: 11 }} compact>
+                              {selectedPaper.question_count || 0} questions • {selectedPaper.total_pages || 1} page{(selectedPaper.total_pages || 1) > 1 ? 's' : ''}
+                            </Chip>
+                          </View>
                         </View>
                         <Paragraph style={styles.selectedPaperDate}>
                           Created: {formatDate(selectedPaper.uploaded_at)}
                         </Paragraph>
+                        <View style={[styles.typeInstructionContainer, { backgroundColor: '#e8f5e8' }]}>
+                          <Paragraph style={[styles.typeInstructionText, { color: '#2e7d32' }]}>
+                            📝 {getQuestionTypeInfo(selectedPaper.question_type || 'traditional').instruction}
+                          </Paragraph>
+                        </View>
                         <Button
                           mode="outlined"
                           onPress={() => setSelectedPaper(null)}
@@ -297,44 +409,58 @@ export default function StudentSubmissionScreen() {
         
 
         {/* Answer Sheet Upload */}
-        <Card style={styles.card}>
-          <Card.Content>
-            <Title style={styles.cardTitle}>Step 3: Upload Answer Sheet</Title>
-            
-            {selectedImage ? (
-              <View style={styles.imageContainer}>
-                <Image source={{ uri: selectedImage.uri }} style={styles.selectedImage} />
-                <Paragraph style={styles.imageInfo}>
-                  Answer sheet selected: {selectedImage.width}x{selectedImage.height}
-                </Paragraph>
-                <Button
-                  mode="outlined"
-                  onPress={showImagePicker}
-                  style={styles.changeButton}
-                  disabled={submitting}
-                >
-                  Change Image
-                </Button>
-              </View>
-            ) : (
-              <View style={styles.selectImageContainer}>
-                <Paragraph style={styles.selectImageText}>
-                  No answer sheet selected
-                </Paragraph>
-                <Button
-                  mode="contained"
-                  onPress={showImagePicker}
-                  style={styles.selectButton}
-                  disabled={submitting}
-                >
-                  Select Answer Sheet
-                </Button>
-              </View>
-            )}
-          </Card.Content>
-        </Card>
-
-        {/* Submit Button */}
+          <Card style={styles.card}>
+            <Card.Content>
+              <Title style={styles.cardTitle}>Step 3: Upload Answer Sheet{selectedPaper && selectedPaper.total_pages > 1 ? 's' : ''}</Title>
+              
+              {selectedImages.length > 0 ? (
+                <View style={styles.imageContainer}>
+                  <FlatList
+                    data={selectedImages}
+                    keyExtractor={(item, index) => index.toString()}
+                    renderItem={({ item, index }) => (
+                      <View style={styles.imageItem}>
+                        <Paragraph style={styles.pageLabel}>Page {index + 1}</Paragraph>
+                        <Image source={{ uri: item.uri }} style={styles.selectedImage} />
+                        <Paragraph style={styles.imageInfo}>
+                          {item.width}x{item.height}
+                        </Paragraph>
+                      </View>
+                    )}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                  />
+                  <Button
+                    mode="outlined"
+                    onPress={showImagePicker}
+                    style={styles.changeButton}
+                    disabled={submitting}
+                  >
+                    Change Images
+                  </Button>
+                </View>
+              ) : (
+                <View style={styles.selectImageContainer}>
+                  <Paragraph style={styles.selectImageText}>
+                    No answer sheet{selectedPaper && selectedPaper.total_pages > 1 ? 's' : ''} selected
+                  </Paragraph>
+                  {selectedPaper && selectedPaper.total_pages > 1 && (
+                    <Paragraph style={styles.selectHelpText}>
+                      This question paper has {selectedPaper.total_pages} pages. Please select {selectedPaper.total_pages} images.
+                    </Paragraph>
+                  )}
+                  <Button
+                    mode="contained"
+                    onPress={showImagePicker}
+                    style={styles.selectButton}
+                    disabled={submitting}
+                  >
+                    Select Answer Sheet{selectedPaper && selectedPaper.total_pages > 1 ? 's' : ''}
+                  </Button>
+                </View>
+              )}
+            </Card.Content>
+          </Card>        {/* Submit Button */}
         <Card style={styles.card}>
           <Card.Content>
             <Title style={styles.cardTitle}>Step 4: Submit for Evaluation</Title>
@@ -344,14 +470,14 @@ export default function StudentSubmissionScreen() {
               mode="contained"
               onPress={submitAnswers}
               style={styles.submitButton}
-              disabled={submitting || !studentName.trim() || !selectedPaper || !selectedImage}
+              disabled={submitting || !studentName.trim() || !selectedPaper || selectedImages.length === 0}
               contentStyle={styles.submitButtonContent}
             >
               {submitting ? (
-                <>
+                <View style={styles.submittingContainer}>
                   <ActivityIndicator color="white" size="small" />
-                  <Paragraph style={styles.submittingText}>  Evaluating...</Paragraph>
-                </>
+                  <Text style={styles.submittingText}>  Evaluating...</Text>
+                </View>
               ) : (
                 'Submit Answer Sheet'
               )}
@@ -451,9 +577,24 @@ const styles = StyleSheet.create({
     marginRight: 10,
     color: '#1976d2',
   },
+  selectedChipsContainer: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: 5,
+  },
   selectedPaperDate: {
     color: '#1976d2',
     marginBottom: 15,
+  },
+  typeInstructionContainer: {
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 15,
+  },
+  typeInstructionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
   },
   changePaperButton: {
     borderColor: '#1976d2',
@@ -467,20 +608,31 @@ const styles = StyleSheet.create({
   imageContainer: {
     alignItems: 'center',
   },
+  imageItem: {
+    width: 120,
+    marginRight: 10,
+    alignItems: 'center',
+  },
+  pageLabel: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 5,
+    color: '#666',
+  },
   selectedImage: {
     width: '100%',
-    height: 200,
+    height: 80,
     borderRadius: 8,
-    marginBottom: 10,
-    resizeMode: 'contain',
+    marginBottom: 5,
+    resizeMode: 'cover',
   },
   imageInfo: {
     color: '#666',
-    marginBottom: 10,
+    fontSize: 10,
     textAlign: 'center',
   },
   changeButton: {
-    marginTop: 5,
+    marginTop: 15,
   },
   selectImageContainer: {
     alignItems: 'center',
@@ -493,6 +645,12 @@ const styles = StyleSheet.create({
   selectImageText: {
     color: '#999',
     marginBottom: 15,
+  },
+  selectHelpText: {
+    color: '#999',
+    marginBottom: 20,
+    textAlign: 'center',
+    fontSize: 14,
   },
   selectButton: {
     paddingHorizontal: 20,
@@ -508,6 +666,10 @@ const styles = StyleSheet.create({
   },
   submitButtonContent: {
     paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  submittingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },

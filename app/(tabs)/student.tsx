@@ -30,13 +30,15 @@ interface Paper {
   name: string;
   uploaded_at: string;
   question_count: number;
+  total_pages: number;
+  question_type: string;
 }
 
 export default function StudentSubmission() {
   const [studentName, setStudentName] = useState('');
   const [papers, setPapers] = useState<Paper[]>([]);
   const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null);
-  const [selectedImage, setSelectedImage] = useState<any>(null);
+  const [selectedImages, setSelectedImages] = useState<any[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [loadingPapers, setLoadingPapers] = useState(true);
   
@@ -45,6 +47,44 @@ export default function StudentSubmission() {
   useEffect(() => {
     loadPapers();
   }, []);
+
+  // Reset images when paper selection changes
+  useEffect(() => {
+    setSelectedImages([]);
+  }, [selectedPaper]);
+
+  const getQuestionTypeInfo = (questionType: string) => {
+    switch (questionType) {
+      case 'omr':
+        return { 
+          label: 'OMR (Fill Circles)', 
+          color: '#2196F3', 
+          icon: 'circle-outline',
+          instruction: 'Fill the circles completely for your chosen answers'
+        };
+      case 'traditional':
+        return { 
+          label: 'Traditional (Mark with ✓)', 
+          color: '#4CAF50', 
+          icon: 'text-box-outline',
+          instruction: 'Mark your chosen answers with ✓ or clear marks'
+        };
+      case 'mixed':
+        return { 
+          label: 'Mixed (OMR + Traditional)', 
+          color: '#FF9800', 
+          icon: 'format-list-bulleted',
+          instruction: 'Follow the specific format for each question type'
+        };
+      default:
+        return { 
+          label: 'Traditional (Mark with ✓)', 
+          color: '#4CAF50', 
+          icon: 'text-box-outline',
+          instruction: 'Mark your chosen answers with ✓ or clear marks'
+        };
+    }
+  };
 
   const loadPapers = async () => {
     try {
@@ -57,22 +97,40 @@ export default function StudentSubmission() {
     }
   };
 
-  const selectImage = async () => {
+  const selectImages = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Permission needed', 'Sorry, we need camera roll permissions to make this work!');
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [3, 4],
-      quality: 0.8,
-    });
+    const isMultiPage = selectedPaper && selectedPaper.total_pages > 1;
+    
+    if (isMultiPage) {
+      // For multi-page papers, allow multiple selection
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        selectionLimit: selectedPaper.total_pages,
+        allowsEditing: false,
+        quality: 0.8,
+      });
 
-    if (!result.canceled && result.assets[0]) {
-      setSelectedImage(result.assets[0]);
+      if (!result.canceled && result.assets) {
+        setSelectedImages(result.assets);
+      }
+    } else {
+      // For single-page papers, allow only one image
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [3, 4],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setSelectedImages([result.assets[0]]);
+      }
     }
   };
 
@@ -90,17 +148,30 @@ export default function StudentSubmission() {
     });
 
     if (!result.canceled && result.assets[0]) {
-      setSelectedImage(result.assets[0]);
+      const isMultiPage = selectedPaper && selectedPaper.total_pages > 1;
+      
+      if (isMultiPage) {
+        // For multi-page, add to existing images
+        setSelectedImages(prev => [...prev, result.assets[0]]);
+      } else {
+        // For single-page, replace existing image
+        setSelectedImages([result.assets[0]]);
+      }
     }
   };
 
   const showImagePicker = () => {
+    const isMultiPage = selectedPaper && selectedPaper.total_pages > 1;
+    const maxPages = selectedPaper?.total_pages || 1;
+    
     Alert.alert(
-      'Select Image',
-      'Choose how you want to select your answer sheet',
+      'Select Answer Sheet',
+      isMultiPage 
+        ? `This question paper has ${maxPages} pages. You can select multiple images.`
+        : 'Choose how you want to select your answer sheet',
       [
-        { text: 'Camera', onPress: takePhoto },
-        { text: 'Gallery', onPress: selectImage },
+        { text: 'Take Photo', onPress: takePhoto },
+        { text: isMultiPage ? 'Select Multiple' : 'Gallery', onPress: selectImages },
         { text: 'Cancel', style: 'cancel' },
       ]
     );
@@ -117,8 +188,19 @@ export default function StudentSubmission() {
       return;
     }
 
-    if (!selectedImage) {
-      Alert.alert('Error', 'Please select your answer sheet image');
+    if (selectedImages.length === 0) {
+      Alert.alert('Error', 'Please select your answer sheet image(s)');
+      return;
+    }
+
+    // Validate page count for multi-page papers
+    const isMultiPage = selectedPaper.total_pages > 1;
+    if (isMultiPage && selectedImages.length !== selectedPaper.total_pages) {
+      Alert.alert(
+        'Page Count Mismatch',
+        `This question paper has ${selectedPaper.total_pages} pages, but you selected ${selectedImages.length} image(s). Please select exactly ${selectedPaper.total_pages} images - one for each page.`,
+        [{ text: 'OK' }]
+      );
       return;
     }
 
@@ -128,13 +210,27 @@ export default function StudentSubmission() {
       formData.append('studentName', studentName.trim());
       formData.append('paperId', selectedPaper.id.toString());
       
-      const imageFile = {
-        uri: selectedImage.uri,
-        type: 'image/jpeg',
-        name: 'answer-sheet.jpg',
-      } as any;
-      
-      formData.append('answerSheet', imageFile);
+      if (isMultiPage) {
+        // For multi-page papers, append multiple files
+        selectedImages.forEach((image, index) => {
+          const imageFile = {
+            uri: image.uri,
+            type: 'image/jpeg',
+            name: `answer-sheet-page-${index + 1}.jpg`,
+          } as any;
+          
+          formData.append('answerSheets', imageFile);
+        });
+      } else {
+        // For single-page papers, append single file
+        const imageFile = {
+          uri: selectedImages[0].uri,
+          type: 'image/jpeg',
+          name: 'answer-sheet.jpg',
+        } as any;
+        
+        formData.append('answerSheet', imageFile);
+      }
 
       const response = await submissionService.submit(formData);
       
@@ -181,7 +277,7 @@ export default function StudentSubmission() {
             onPress: () => {
               setStudentName('');
               setSelectedPaper(null);
-              setSelectedImage(null);
+              setSelectedImages([]);
             },
           },
         ]
@@ -194,6 +290,10 @@ export default function StudentSubmission() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const removeImage = (index: number) => {
+    setSelectedImages(prev => prev.filter((_, i) => i !== index));
   };
 
   const formatDate = (dateString: string) => {
@@ -305,13 +405,29 @@ export default function StudentSubmission() {
                             <Title style={[styles.selectedPaperTitle, { color: theme.colors.onSecondaryContainer }]}>
                               {selectedPaper.name}
                             </Title>
-                            <Chip mode="outlined" textStyle={{ color: theme.colors.onSecondaryContainer }}>
-                              {selectedPaper.question_count || 0} questions
-                            </Chip>
+                            <View style={styles.selectedChipsContainer}>
+                              <Chip 
+                                mode="outlined" 
+                                textStyle={{ color: getQuestionTypeInfo(selectedPaper.question_type || 'traditional').color, fontSize: 11 }}
+                                style={{ borderColor: getQuestionTypeInfo(selectedPaper.question_type || 'traditional').color, marginBottom: 5 }}
+                                icon={getQuestionTypeInfo(selectedPaper.question_type || 'traditional').icon}
+                                compact
+                              >
+                                {getQuestionTypeInfo(selectedPaper.question_type || 'traditional').label}
+                              </Chip>
+                              <Chip mode="outlined" textStyle={{ color: theme.colors.onSecondaryContainer, fontSize: 11 }} compact>
+                                {selectedPaper.question_count || 0} questions • {selectedPaper.total_pages || 1} page{(selectedPaper.total_pages || 1) > 1 ? 's' : ''}
+                              </Chip>
+                            </View>
                           </View>
                           <Paragraph style={[styles.selectedPaperDate, { color: theme.colors.onSecondaryContainer }]}>
                             Created: {formatDate(selectedPaper.uploaded_at)}
                           </Paragraph>
+                          <View style={[styles.typeInstructionContainer, { backgroundColor: theme.colors.primaryContainer }]}>
+                            <Paragraph style={[styles.typeInstructionText, { color: theme.colors.onPrimaryContainer }]}>
+                              📝 {getQuestionTypeInfo(selectedPaper.question_type || 'traditional').instruction}
+                            </Paragraph>
+                          </View>
                           <Button
                             mode="outlined"
                             onPress={() => setSelectedPaper(null)}
@@ -352,36 +468,89 @@ export default function StudentSubmission() {
           <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
             <Card.Content>
               <Title style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
-                Step 3: Upload Answer Sheet
+                Step 3: Upload Answer Sheet{selectedPaper && selectedPaper.total_pages > 1 ? 's' : ''}
+                {selectedPaper && selectedPaper.total_pages > 1 && (
+                  <Paragraph style={[styles.pageRequirement, { color: theme.colors.onSurfaceVariant }]}>
+                    {`\nRequired: ${selectedPaper.total_pages} page${selectedPaper.total_pages > 1 ? 's' : ''} (${selectedImages.length}/${selectedPaper.total_pages} selected)`}
+                  </Paragraph>
+                )}
               </Title>
               
-              {selectedImage ? (
-                <View style={styles.imageContainer}>
-                  <Image source={{ uri: selectedImage.uri }} style={styles.selectedImage} />
-                  <Paragraph style={[styles.imageInfo, { color: theme.colors.onSurfaceVariant }]}>
-                    Answer sheet selected: {selectedImage.width}x{selectedImage.height}
-                  </Paragraph>
-                  <Button
-                    mode="outlined"
-                    onPress={showImagePicker}
-                    style={styles.changeButton}
-                    disabled={submitting}
-                  >
-                    Change Image
-                  </Button>
+              {selectedImages.length > 0 ? (
+                <View>
+                  <FlatList
+                    data={selectedImages}
+                    keyExtractor={(item, index) => index.toString()}
+                    renderItem={({ item, index }) => (
+                      <View style={[styles.imageItem, { backgroundColor: theme.colors.surface }]}>
+                        <View style={styles.imageHeader}>
+                          <Chip mode="outlined" style={styles.pageChip}>
+                            Page {index + 1}
+                          </Chip>
+                          <IconButton
+                            icon="close"
+                            size={20}
+                            onPress={() => removeImage(index)}
+                            disabled={submitting}
+                          />
+                        </View>
+                        <Image source={{ uri: item.uri }} style={styles.thumbnailImage} />
+                        <Paragraph style={[styles.imageSize, { color: theme.colors.onSurfaceVariant }]}>
+                          {item.width}x{item.height}
+                        </Paragraph>
+                      </View>
+                    )}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.imagesList}
+                  />
+                  
+                  <View style={styles.imageActions}>
+                    <Button
+                      mode="outlined"
+                      onPress={showImagePicker}
+                      style={styles.addMoreButton}
+                      disabled={submitting || !!(selectedPaper && selectedImages.length >= (selectedPaper.total_pages || 1))}
+                    >
+                      {selectedPaper && selectedPaper.total_pages > 1 && selectedImages.length < selectedPaper.total_pages 
+                        ? `Add More (${selectedPaper.total_pages - selectedImages.length} needed)` 
+                        : 'Change Images'}
+                    </Button>
+                    <Button
+                      mode="text"
+                      onPress={() => setSelectedImages([])}
+                      disabled={submitting}
+                    >
+                      Clear All
+                    </Button>
+                  </View>
+                  
+                  {selectedPaper && selectedPaper.total_pages > 1 && selectedImages.length !== selectedPaper.total_pages && (
+                    <View style={[styles.warningContainer, { backgroundColor: theme.colors.errorContainer }]}>
+                      <Paragraph style={[styles.warningText, { color: theme.colors.onErrorContainer }]}>
+                        ⚠️ Page count mismatch: This question paper has {selectedPaper.total_pages} pages, but you selected {selectedImages.length} image(s). 
+                        Please select exactly {selectedPaper.total_pages} images.
+                      </Paragraph>
+                    </View>
+                  )}
                 </View>
               ) : (
                 <View style={[styles.selectImageContainer, { borderColor: theme.colors.outline }]}>
                   <Paragraph style={[styles.selectImageText, { color: theme.colors.onSurfaceVariant }]}>
-                    No answer sheet selected
+                    No answer sheet{selectedPaper && selectedPaper.total_pages > 1 ? 's' : ''} selected
                   </Paragraph>
+                  {selectedPaper && selectedPaper.total_pages > 1 && (
+                    <Paragraph style={[styles.selectHelpText, { color: theme.colors.onSurfaceVariant }]}>
+                      This question paper has {selectedPaper.total_pages} pages. Please select {selectedPaper.total_pages} images.
+                    </Paragraph>
+                  )}
                   <Button
                     mode="contained"
                     onPress={showImagePicker}
                     style={styles.selectButton}
-                    disabled={submitting}
+                    disabled={submitting || !selectedPaper}
                   >
-                    Select Answer Sheet
+                    Select Answer Sheet{selectedPaper && selectedPaper.total_pages > 1 ? 's' : ''}
                   </Button>
                 </View>
               )}
@@ -399,7 +568,8 @@ export default function StudentSubmission() {
                 mode="contained"
                 onPress={submitAnswers}
                 style={[styles.submitButton, { backgroundColor: theme.colors.primary }]}
-                disabled={submitting || !studentName.trim() || !selectedPaper || !selectedImage}
+                disabled={submitting || !studentName.trim() || !selectedPaper || selectedImages.length === 0 || 
+                  (selectedPaper && selectedPaper.total_pages > 1 && selectedImages.length !== selectedPaper.total_pages)}
                 contentStyle={styles.submitButtonContent}
               >
                 {submitting ? (
@@ -505,8 +675,23 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 10,
   },
+  selectedChipsContainer: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: 5,
+  },
   selectedPaperDate: {
     marginBottom: 15,
+  },
+  typeInstructionContainer: {
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 15,
+  },
+  typeInstructionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
   },
   changePaperButton: {
     marginTop: 5,
@@ -562,5 +747,64 @@ const styles = StyleSheet.create({
   submittingText: {
     color: 'white',
     marginLeft: 8,
+  },
+  pageRequirement: {
+    fontSize: 14,
+    marginTop: 5,
+  },
+  imagesList: {
+    marginBottom: 15,
+  },
+  imageItem: {
+    width: 120,
+    marginRight: 10,
+    padding: 8,
+    borderRadius: 8,
+    elevation: 1,
+  },
+  imageHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  pageChip: {
+    height: 28,
+  },
+  thumbnailImage: {
+    width: '100%',
+    height: 80,
+    borderRadius: 4,
+    marginBottom: 5,
+    resizeMode: 'cover',
+  },
+  imageSize: {
+    fontSize: 10,
+    textAlign: 'center',
+  },
+  imageActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  addMoreButton: {
+    flex: 1,
+    marginRight: 10,
+  },
+  selectHelpText: {
+    marginBottom: 20,
+    textAlign: 'center',
+    fontSize: 14,
+  },
+  warningContainer: {
+    marginTop: 15,
+    padding: 15,
+    borderRadius: 8,
+  },
+  warningText: {
+    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
 });

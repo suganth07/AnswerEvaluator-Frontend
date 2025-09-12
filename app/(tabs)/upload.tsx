@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
   Alert,
   ScrollView,
   Image,
+  FlatList,
 } from 'react-native';
 import {
   TextInput,
@@ -13,20 +14,63 @@ import {
   Title,
   Paragraph,
   ActivityIndicator,
+  Chip,
+  IconButton,
 } from 'react-native-paper';
 import * as ImagePicker from 'expo-image-picker';
-import { paperService } from '../../services/api';
+import { paperService, authService } from '../../services/api';
 import { router } from 'expo-router';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function UploadPaper() {
   const [paperName, setPaperName] = useState('');
-  const [selectedImage, setSelectedImage] = useState<any>(null);
+  const [selectedImages, setSelectedImages] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
   
   const { theme } = useTheme();
+  const { isAuthenticated, logout } = useAuth();
 
-  const selectImage = async () => {
+  // Check authentication status on component mount
+  useEffect(() => {
+    checkAuthStatus();
+  }, []);
+
+  const checkAuthStatus = async () => {
+    try {
+      if (!isAuthenticated) {
+        Alert.alert(
+          'Authentication Required',
+          'Please log in to upload question papers.',
+          [{ text: 'OK', onPress: () => router.push('/login') }]
+        );
+        return;
+      }
+
+      // Verify token with backend
+      await authService.verify();
+    } catch (error: any) {
+      console.error('Auth verification failed:', error);
+      if (error.response?.status === 401 || error.response?.data?.error?.includes('Invalid token')) {
+        Alert.alert(
+          'Session Expired',
+          'Your session has expired. Please log in again.',
+          [
+            {
+              text: 'Login',
+              onPress: async () => {
+                await logout();
+                router.push('/login');
+              }
+            }
+          ]
+        );
+      }
+    }
+  };
+
+  const selectImages = async () => {
     // Request permission to access camera and media library
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -36,13 +80,14 @@ export default function UploadPaper() {
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [3, 4],
+      allowsMultipleSelection: true,
+      selectionLimit: 10,
+      allowsEditing: false,
       quality: 0.8,
     });
 
-    if (!result.canceled && result.assets[0]) {
-      setSelectedImage(result.assets[0]);
+    if (!result.canceled && result.assets) {
+      setSelectedImages(result.assets);
     }
   };
 
@@ -60,20 +105,31 @@ export default function UploadPaper() {
     });
 
     if (!result.canceled && result.assets[0]) {
-      setSelectedImage(result.assets[0]);
+      setSelectedImages(prev => [...prev, result.assets[0]]);
     }
   };
 
   const showImagePicker = () => {
     Alert.alert(
-      'Select Image',
-      'Choose how you want to select the question paper',
+      'Add Question Paper Pages',
+      'Choose how you want to add question paper pages',
       [
-        { text: 'Camera', onPress: takePhoto },
-        { text: 'Gallery', onPress: selectImage },
+        { text: 'Take Photo', onPress: takePhoto },
+        { text: 'Select Multiple', onPress: selectImages },
         { text: 'Cancel', style: 'cancel' },
       ]
     );
+  };
+
+  const removeImage = (index: number) => {
+    setSelectedImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const reorderImages = (fromIndex: number, toIndex: number) => {
+    const newImages = [...selectedImages];
+    const [movedItem] = newImages.splice(fromIndex, 1);
+    newImages.splice(toIndex, 0, movedItem);
+    setSelectedImages(newImages);
   };
 
   const uploadPaper = async () => {
@@ -82,9 +138,31 @@ export default function UploadPaper() {
       return;
     }
 
-    if (!selectedImage) {
-      Alert.alert('Error', 'Please select an image');
+    if (selectedImages.length === 0) {
+      Alert.alert('Error', 'Please select at least one image');
       return;
+    }
+
+    // Check authentication before upload
+    try {
+      await authService.verify();
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        Alert.alert(
+          'Session Expired',
+          'Your session has expired. Please log in again.',
+          [
+            {
+              text: 'Login',
+              onPress: async () => {
+                await logout();
+                router.push('/login');
+              }
+            }
+          ]
+        );
+        return;
+      }
     }
 
     setUploading(true);
@@ -92,47 +170,93 @@ export default function UploadPaper() {
       const formData = new FormData();
       formData.append('name', paperName.trim());
       
-      // Create image file object for FormData
-      const imageFile = {
-        uri: selectedImage.uri,
-        type: 'image/jpeg',
-        name: 'question-paper.jpg',
-      } as any;
-      
-      formData.append('paper', imageFile);
+      // Add all images to FormData
+      selectedImages.forEach((image, index) => {
+        const imageFile = {
+          uri: image.uri,
+          type: 'image/jpeg',
+          name: `question-paper-page-${index + 1}.jpg`,
+        } as any;
+        
+        formData.append('papers', imageFile);
+      });
 
       const response = await paperService.upload(formData);
       
       Alert.alert(
         'Success',
-        `Paper uploaded and processed successfully!\n\nExtracted ${response.extractedQuestions} questions.`,
+        `Multi-page paper uploaded successfully!\n\n` +
+        `Total Pages: ${response.totalPages}\n` +
+        `Questions Extracted: ${response.extractedQuestions}\n\n` +
+        `Questions per page:\n` +
+        response.questionsPerPage.map((page: any) => 
+          `Page ${page.page}: ${page.questions} questions`
+        ).join('\n'),
         [
           {
             text: 'OK',
             onPress: () => {
               setPaperName('');
-              setSelectedImage(null);
+              setSelectedImages([]);
               router.back();
             },
           },
         ]
       );
     } catch (error: any) {
-      Alert.alert(
-        'Upload Failed',
-        error.response?.data?.error || 'Failed to upload paper'
-      );
+      console.error('Upload error:', error);
+      
+      if (error.response?.status === 401 || error.response?.data?.error?.includes('Invalid token')) {
+        Alert.alert(
+          'Session Expired',
+          'Your session has expired. Please log in again.',
+          [
+            {
+              text: 'Login',
+              onPress: async () => {
+                await logout();
+                router.push('/login');
+              }
+            }
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Upload Failed',
+          error.response?.data?.error || 'Failed to upload paper'
+        );
+      }
     } finally {
       setUploading(false);
     }
   };
+
+  const renderImageItem = ({ item, index }: { item: any; index: number }) => (
+    <View style={[styles.imageItem, { backgroundColor: theme.colors.surface }]}>
+      <View style={styles.imageHeader}>
+        <Chip mode="outlined" style={styles.pageChip}>
+          Page {index + 1}
+        </Chip>
+        <IconButton
+          icon="close"
+          size={20}
+          onPress={() => removeImage(index)}
+          disabled={uploading}
+        />
+      </View>
+      <Image source={{ uri: item.uri }} style={styles.thumbnailImage} />
+      <Paragraph style={[styles.imageSize, { color: theme.colors.onSurfaceVariant }]}>
+        {item.width}x{item.height}
+      </Paragraph>
+    </View>
+  );
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <View style={[styles.header, { backgroundColor: theme.colors.surface }]}>
         <Title style={[styles.headerTitle, { color: theme.colors.onSurface }]}>Upload Question Paper</Title>
         <Paragraph style={[styles.headerSubtitle, { color: theme.colors.onSurfaceVariant }]}>
-          Upload a question paper with marked correct answers
+          Upload single or multi-page question papers with marked correct answers
         </Paragraph>
       </View>
 
@@ -140,17 +264,19 @@ export default function UploadPaper() {
         {/* Instructions */}
         <Card style={[styles.instructionsCard, { backgroundColor: theme.colors.primaryContainer }]}>
           <Card.Content>
-            <Title style={[styles.instructionsTitle, { color: theme.colors.onPrimaryContainer }]}>Upload Instructions</Title>
+            <Title style={[styles.instructionsTitle, { color: theme.colors.onPrimaryContainer }]}>Multi-Page Upload Instructions</Title>
             <Paragraph style={[styles.instructionsText, { color: theme.colors.onPrimaryContainer }]}>
-              Format: {'\n'}
+              Format (per page): {'\n'}
               1) What language is Python?{'\n'}
               a) Compiled{'\n'}
               b) Interpreted ✓{'\n'}
               c) Machine{'\n\n'}
               
+              • Upload all pages in order (1, 2, 3...){'\n'}
               • Mark correct answers with ✓ or circle them{'\n'}
-              • Ensure clear, well-lit images{'\n'}
-              • Keep text readable and unobstructed
+              • Questions will be numbered continuously across pages{'\n'}
+              • Maximum 10 pages per paper{'\n'}
+              • Ensure clear, well-lit images
             </Paragraph>
           </Card.Content>
         </Card>
@@ -165,7 +291,7 @@ export default function UploadPaper() {
               onChangeText={setPaperName}
               style={styles.input}
               mode="outlined"
-              placeholder="e.g., Python Programming Quiz - Chapter 1"
+              placeholder="e.g., Python Programming Quiz - Chapters 1-3"
               disabled={uploading}
             />
           </Card.Content>
@@ -174,27 +300,45 @@ export default function UploadPaper() {
         {/* Image Selection */}
         <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
           <Card.Content>
-            <Title style={[styles.cardTitle, { color: theme.colors.onSurface }]}>Step 2: Upload Question Paper</Title>
+            <Title style={[styles.cardTitle, { color: theme.colors.onSurface }]}>
+              Step 2: Upload Question Paper Pages ({selectedImages.length}/10)
+            </Title>
             
-            {selectedImage ? (
-              <View style={styles.imageContainer}>
-                <Image source={{ uri: selectedImage.uri }} style={styles.selectedImage} />
-                <Paragraph style={[styles.imageInfo, { color: theme.colors.onSurfaceVariant }]}>
-                  Image selected: {selectedImage.width}x{selectedImage.height}
-                </Paragraph>
-                <Button
-                  mode="outlined"
-                  onPress={showImagePicker}
-                  style={styles.changeButton}
-                  disabled={uploading}
-                >
-                  Change Image
-                </Button>
+            {selectedImages.length > 0 ? (
+              <View>
+                <FlatList
+                  data={selectedImages}
+                  renderItem={renderImageItem}
+                  keyExtractor={(item, index) => index.toString()}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.imagesList}
+                />
+                <View style={styles.addMoreContainer}>
+                  <Button
+                    mode="outlined"
+                    onPress={showImagePicker}
+                    style={styles.addMoreButton}
+                    disabled={uploading || selectedImages.length >= 10}
+                  >
+                    {selectedImages.length >= 10 ? 'Maximum Reached' : 'Add More Pages'}
+                  </Button>
+                  <Button
+                    mode="text"
+                    onPress={() => setSelectedImages([])}
+                    disabled={uploading}
+                  >
+                    Clear All
+                  </Button>
+                </View>
               </View>
             ) : (
               <View style={[styles.selectImageContainer, { borderColor: theme.colors.outline }]}>
                 <Paragraph style={[styles.selectImageText, { color: theme.colors.onSurfaceVariant }]}>
-                  No image selected
+                  No pages selected
+                </Paragraph>
+                <Paragraph style={[styles.selectHelpText, { color: theme.colors.onSurfaceVariant }]}>
+                  You can select multiple pages at once or add them one by one
                 </Paragraph>
                 <Button
                   mode="contained"
@@ -202,7 +346,7 @@ export default function UploadPaper() {
                   style={styles.selectButton}
                   disabled={uploading}
                 >
-                  Select Image
+                  Select Pages
                 </Button>
               </View>
             )}
@@ -214,23 +358,31 @@ export default function UploadPaper() {
           <Card.Content>
             <Title style={[styles.cardTitle, { color: theme.colors.onSurface }]}>Step 3: Process & Upload</Title>
             <Paragraph style={[styles.uploadDescription, { color: theme.colors.onSurfaceVariant }]}>
-              The system will automatically extract questions and answers using OCR technology.
+              The system will automatically extract questions from all pages and number them continuously.
             </Paragraph>
+            
+            {selectedImages.length > 0 && (
+              <View style={styles.summaryContainer}>
+                <Paragraph style={[styles.summaryText, { color: theme.colors.onSurfaceVariant }]}>
+                  Ready to upload: {selectedImages.length} page{selectedImages.length > 1 ? 's' : ''}
+                </Paragraph>
+              </View>
+            )}
             
             <Button
               mode="contained"
               onPress={uploadPaper}
               style={[styles.uploadButton, { backgroundColor: theme.colors.primary }]}
-              disabled={uploading || !paperName.trim() || !selectedImage}
+              disabled={uploading || !paperName.trim() || selectedImages.length === 0}
               contentStyle={styles.uploadButtonContent}
             >
               {uploading ? (
                 <>
                   <ActivityIndicator color="white" size="small" />
-                  <Paragraph style={styles.uploadingText}>  Processing...</Paragraph>
+                  <Paragraph style={styles.uploadingText}>  Processing {selectedImages.length} page{selectedImages.length > 1 ? 's' : ''}...</Paragraph>
                 </>
               ) : (
-                'Upload & Process Paper'
+                `Upload & Process ${selectedImages.length > 0 ? selectedImages.length + ' Page' + (selectedImages.length > 1 ? 's' : '') : 'Paper'}`
               )}
             </Button>
           </Card.Content>
@@ -281,22 +433,45 @@ const styles = StyleSheet.create({
   input: {
     marginBottom: 10,
   },
-  imageContainer: {
-    alignItems: 'center',
+  imagesList: {
+    marginBottom: 15,
   },
-  selectedImage: {
-    width: '100%',
-    height: 200,
+  imageItem: {
+    width: 120,
+    marginRight: 10,
+    padding: 8,
     borderRadius: 8,
-    marginBottom: 10,
-    resizeMode: 'contain',
+    elevation: 1,
   },
-  imageInfo: {
-    marginBottom: 10,
+  imageHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  pageChip: {
+    height: 28,
+  },
+  thumbnailImage: {
+    width: '100%',
+    height: 80,
+    borderRadius: 4,
+    marginBottom: 5,
+    resizeMode: 'cover',
+  },
+  imageSize: {
+    fontSize: 10,
     textAlign: 'center',
   },
-  changeButton: {
-    marginTop: 5,
+  addMoreContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  addMoreButton: {
+    flex: 1,
+    marginRight: 10,
   },
   selectImageContainer: {
     alignItems: 'center',
@@ -306,7 +481,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   selectImageText: {
-    marginBottom: 15,
+    marginBottom: 10,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  selectHelpText: {
+    marginBottom: 20,
+    textAlign: 'center',
+    fontSize: 14,
   },
   selectButton: {
     paddingHorizontal: 20,
@@ -314,6 +496,16 @@ const styles = StyleSheet.create({
   uploadDescription: {
     marginBottom: 20,
     textAlign: 'center',
+  },
+  summaryContainer: {
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 20,
+  },
+  summaryText: {
+    textAlign: 'center',
+    fontWeight: 'bold',
   },
   uploadButton: {
     paddingVertical: 8,
