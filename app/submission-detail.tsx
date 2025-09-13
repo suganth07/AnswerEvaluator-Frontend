@@ -118,7 +118,7 @@ export default function SubmissionDetailScreen() {
       case "fill_blanks_ai":
         return "AI Fill Blanks";
       case "gemini_vision":
-        return "AI Vision";
+        return " ";
       default:
         return "Traditional";
     }

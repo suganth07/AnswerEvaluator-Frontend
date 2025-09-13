@@ -260,7 +260,7 @@ export default function DashboardScreen() {
           Total Tests
         </Text>
       </View>
-      <View
+      {/* <View
         style={[
           styles.quickStatCard,
           { backgroundColor: theme.colors.surface },
@@ -278,7 +278,7 @@ export default function DashboardScreen() {
         >
           Questions
         </Text>
-      </View>
+      </View> */}
       <View
         style={[
           styles.quickStatCard,
