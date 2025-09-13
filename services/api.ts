@@ -147,7 +147,8 @@ export const questionService = {
     paper_id: number;
     question_number: number;
     question_text?: string;
-    correct_option: string;
+    correct_option?: string;
+    correct_options?: string[];
     page_number?: number;
     question_type?: string;
     options?: any;
@@ -163,6 +164,7 @@ export const questionService = {
       question_number?: number;
       question_text?: string;
       correct_option?: string;
+      correct_options?: string[];
       page_number?: number;
       question_type?: string;
       options?: any;

@@ -33,6 +33,7 @@ interface Question {
   question_number: number;
   question_text: string;
   correct_option: string;
+  correct_options?: string[]; // Support for multiple correct answers
   page_number: number;
   question_type: string;
   options: any;
@@ -246,20 +247,42 @@ export default function QuestionsScreen() {
             >
               Correct Answer:
             </Text>
-            <Chip
-              mode="flat"
-              textStyle={[
-                styles.answerText,
-                { color: theme.colors.onTertiary },
-              ]}
-              style={[
-                styles.answerChip,
-                { backgroundColor: theme.colors.tertiary },
-              ]}
-              compact
-            >
-              {question.correct_option}
-            </Chip>
+            {(() => {
+              // Handle both single and multiple correct answers
+              const correctAnswers = question.correct_options || (question.correct_option ? [question.correct_option] : []);
+              
+              if (correctAnswers.length === 0) {
+                return (
+                  <Chip
+                    mode="flat"
+                    textStyle={[styles.answerText, { color: theme.colors.onError }]}
+                    style={[styles.answerChip, { backgroundColor: theme.colors.errorContainer }]}
+                    compact
+                  >
+                    Not set
+                  </Chip>
+                );
+              }
+              
+              return correctAnswers.map((answer: string, index: number) => (
+                <Chip
+                  key={index}
+                  mode="flat"
+                  textStyle={[
+                    styles.answerText,
+                    { color: theme.colors.onTertiary },
+                  ]}
+                  style={[
+                    styles.answerChip,
+                    { backgroundColor: theme.colors.tertiary },
+                    { marginRight: correctAnswers.length > 1 ? 4 : 0 }
+                  ]}
+                  compact
+                >
+                  {answer.toUpperCase()}
+                </Chip>
+              ));
+            })()}
           </View>
 
           {question.options && typeof question.options === "object" && (
@@ -274,20 +297,47 @@ export default function QuestionsScreen() {
                 Options:
               </Text>
               <View style={styles.optionsList}>
-                {Object.entries(question.options).map(([key, value]) => (
-                  <Chip
-                    key={key}
-                    mode="outlined"
-                    textStyle={[
-                      styles.optionText,
-                      { color: theme.colors.onSurfaceVariant },
-                    ]}
-                    style={styles.optionChip}
-                    compact
-                  >
-                    {key}: {String(value)}
-                  </Chip>
-                ))}
+                {(() => {
+                  // Handle both array and object formats for options
+                  if (Array.isArray(question.options)) {
+                    // Legacy format: ["A", "B", "C", "D"] -> show as A, B, C, D
+                    return question.options.map((option, index) => (
+                      <Chip
+                        key={index}
+                        mode="outlined"
+                        textStyle={[
+                          styles.optionText,
+                          { color: theme.colors.onSurfaceVariant },
+                        ]}
+                        style={styles.optionChip}
+                        compact
+                      >
+                        {option}
+                      </Chip>
+                    ));
+                  } else {
+                    // New format: {"A": "text", "B": "text"}
+                    return Object.entries(question.options).map(([key, value]) => {
+                      // Check if value is just generic "Option X" text
+                      const isGenericText = value === `Option ${key}`;
+                      
+                      return (
+                        <Chip
+                          key={key}
+                          mode="outlined"
+                          textStyle={[
+                            styles.optionText,
+                            { color: theme.colors.onSurfaceVariant },
+                          ]}
+                          style={styles.optionChip}
+                          compact
+                        >
+                          {isGenericText ? key : `${key}: ${String(value)}`}
+                        </Chip>
+                      );
+                    });
+                  }
+                })()}
               </View>
             </View>
           )}

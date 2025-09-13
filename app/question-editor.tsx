@@ -34,6 +34,10 @@ interface QuestionOptions {
   B?: string;
   C?: string;
   D?: string;
+  E?: string;
+  F?: string;
+  G?: string;
+  H?: string;
   [key: string]: string | undefined;
 }
 
@@ -42,11 +46,77 @@ export default function QuestionEditorScreen() {
     question_number: "",
     question_text: "",
     correct_option: "",
+    correct_options: [] as string[], // Add support for multiple correct answers
     page_number: "1",
     question_type: "traditional",
     options: {} as QuestionOptions,
   });
   const [hasOptions, setHasOptions] = useState(false);
+  const [isMultipleCorrect, setIsMultipleCorrect] = useState(false); // New state for multiple correct toggle
+
+  // Utility function to convert numeric keys (0,1,2) to alphabetic keys (A,B,C)
+  const convertNumericKeysToAlphabetic = (options: QuestionOptions | string[]): QuestionOptions => {
+    const converted: QuestionOptions = {};
+    const alphabetKeys = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+    
+    // Handle array format (legacy): ["A", "B", "C", "D"]
+    if (Array.isArray(options)) {
+      options.forEach((option, index) => {
+        if (index < alphabetKeys.length) {
+          converted[alphabetKeys[index]] = option;
+        }
+      });
+      return converted;
+    }
+    
+    // Handle object format: {"0": "text", "1": "text"} or {"A": "text", "B": "text"}
+    const entries = Object.entries(options);
+    
+    // Check if we have numeric keys
+    const hasNumericKeys = entries.some(([key]) => /^\d+$/.test(key));
+    
+    if (hasNumericKeys) {
+      // Sort entries by numeric value for proper conversion
+      const sortedEntries = entries
+        .filter(([key]) => /^\d+$/.test(key))
+        .sort(([a], [b]) => parseInt(a) - parseInt(b));
+      
+      // Convert to alphabetic keys
+      sortedEntries.forEach(([_, value], index) => {
+        if (index < alphabetKeys.length) {
+          converted[alphabetKeys[index]] = value;
+        }
+      });
+      
+      // Keep any existing alphabetic keys
+      entries
+        .filter(([key]) => /^[A-H]$/.test(key))
+        .forEach(([key, value]) => {
+          if (!converted[key]) {
+            converted[key] = value;
+          }
+        });
+      
+      return converted;
+    }
+    
+    // If no numeric keys, return the options as-is (already alphabetic)
+    return options as QuestionOptions;
+  };
+
+  // Utility function to convert numeric correct answers to alphabetic
+  const convertCorrectAnswersToAlphabetic = (correctAnswers: string[], hasNumericKeys: boolean): string[] => {
+    if (!hasNumericKeys) return correctAnswers;
+    
+    const alphabetKeys = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+    return correctAnswers.map(answer => {
+      const numericValue = parseInt(answer);
+      if (!isNaN(numericValue) && numericValue < alphabetKeys.length) {
+        return alphabetKeys[numericValue];
+      }
+      return answer.toUpperCase();
+    });
+  };
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const initializedRef = useRef(false);
@@ -66,17 +136,45 @@ export default function QuestionEditorScreen() {
           ? JSON.parse(params.questionData as string)
           : null;
         if (questionData) {
+          // Parse correct_options if it exists and is a string
+          let correctOptions: string[] = [];
+          let isMultiple = false;
+          
+          if (questionData.correct_options) {
+            try {
+              correctOptions = typeof questionData.correct_options === 'string' 
+                ? JSON.parse(questionData.correct_options)
+                : questionData.correct_options;
+              isMultiple = Array.isArray(correctOptions) && correctOptions.length > 1;
+            } catch (e) {
+              console.error('Error parsing correct_options:', e);
+            }
+          }
+          
+          // Convert options from numeric to alphabetic format for consistency
+          const convertedOptions = convertNumericKeysToAlphabetic(questionData.options || {});
+          const hasNumericKeys = Array.isArray(questionData.options) || 
+                                Object.keys(questionData.options || {}).some(key => /^\d+$/.test(key));
+          
+          // Convert correct answers if necessary
+          const convertedCorrectOptions = convertCorrectAnswersToAlphabetic(correctOptions, hasNumericKeys);
+          const convertedCorrectOption = hasNumericKeys && questionData.correct_option && /^\d+$/.test(questionData.correct_option)
+            ? convertCorrectAnswersToAlphabetic([questionData.correct_option], true)[0]
+            : (questionData.correct_option || "").toUpperCase();
+          
           setFormData({
             question_number: questionData.question_number.toString(),
             question_text: questionData.question_text || "",
-            correct_option: questionData.correct_option,
+            correct_option: convertedCorrectOption,
+            correct_options: convertedCorrectOptions,
             page_number: questionData.page_number.toString(),
             question_type: questionData.question_type,
-            options: questionData.options || {},
+            options: convertedOptions,
           });
           setHasOptions(
-            questionData.options && Object.keys(questionData.options).length > 0
+            convertedOptions && Object.keys(convertedOptions).length > 0
           );
+          setIsMultipleCorrect(isMultiple);
           initializedRef.current = true;
         }
       } catch (error) {
@@ -106,8 +204,15 @@ export default function QuestionEditorScreen() {
       newErrors.question_number = "Question number must be a positive number";
     }
 
-    if (!formData.correct_option) {
-      newErrors.correct_option = "Correct option is required";
+    // Validate correct answers based on single/multiple mode
+    if (isMultipleCorrect) {
+      if (!formData.correct_options || formData.correct_options.length === 0) {
+        newErrors.correct_option = "At least one correct option is required";
+      }
+    } else {
+      if (!formData.correct_option) {
+        newErrors.correct_option = "Correct option is required";
+      }
     }
 
     if (!formData.page_number) {
@@ -126,12 +231,23 @@ export default function QuestionEditorScreen() {
         newErrors.options =
           "At least one option is required when options are enabled";
       } else {
-        const correctOptionExists = optionKeys.includes(
-          formData.correct_option.toUpperCase()
-        );
-        if (!correctOptionExists) {
-          newErrors.correct_option =
-            "Correct option must match one of the provided options";
+        // Validate correct answers match available options
+        if (isMultipleCorrect) {
+          const invalidOptions = formData.correct_options.filter(
+            option => !optionKeys.includes(option.toUpperCase())
+          );
+          if (invalidOptions.length > 0) {
+            newErrors.correct_option =
+              `Invalid correct options: ${invalidOptions.join(', ')}. Must match available options: ${optionKeys.join(', ')}.`;
+          }
+        } else {
+          const correctOptionExists = optionKeys.includes(
+            formData.correct_option.toUpperCase()
+          );
+          if (!correctOptionExists && formData.correct_option) {
+            newErrors.correct_option =
+              `Correct option must match one of the provided options: ${optionKeys.join(', ')}`;
+          }
         }
       }
     }
@@ -148,25 +264,34 @@ export default function QuestionEditorScreen() {
 
     setLoading(true);
     try {
-      const questionPayload = {
-        ...formData,
+      // Base payload
+      const questionPayload: any = {
         question_number: Number(formData.question_number),
+        question_text: formData.question_text,
         page_number: Number(formData.page_number),
+        question_type: formData.question_type,
         options:
           hasOptions && Object.keys(formData.options).length > 0
             ? formData.options
             : null,
       };
 
+      // Add correct answer(s) based on mode
+      if (isMultipleCorrect) {
+        questionPayload.correct_options = formData.correct_options;
+      } else {
+        questionPayload.correct_option = formData.correct_option;
+      }
+
       if (mode === "add") {
         await questionService.createQuestion({
           ...questionPayload,
           paper_id: Number(paperId),
         });
-        Alert.alert("Success", "Question created successfully");
+        Alert.alert("Success", `Question created successfully with ${isMultipleCorrect ? 'multiple' : 'single'} correct answer${isMultipleCorrect ? 's' : ''}`);
       } else {
         await questionService.updateQuestion(questionId, questionPayload);
-        Alert.alert("Success", "Question updated successfully");
+        Alert.alert("Success", `Question updated successfully with ${isMultipleCorrect ? 'multiple' : 'single'} correct answer${isMultipleCorrect ? 's' : ''}`);
       }
 
       router.back();
@@ -215,14 +340,72 @@ export default function QuestionEditorScreen() {
 
   const addNewOption = () => {
     const existingKeys = Object.keys(formData.options);
+    
+    // Always use alphabetic sequence (A, B, C, D, E, F, G, H)
     const availableKeys = ["A", "B", "C", "D", "E", "F", "G", "H"];
     const nextKey = availableKeys.find((key) => !existingKeys.includes(key));
 
     if (nextKey) {
       updateOption(nextKey, "");
     } else {
-      Alert.alert("Limit Reached", "Maximum 8 options allowed");
+      Alert.alert("Limit Reached", "Maximum 8 options allowed (A-H)");
     }
+  };
+
+  // Functions for handling multiple correct answers
+  const toggleCorrectOption = (option: string) => {
+    if (!isMultipleCorrect) return;
+    
+    const currentCorrectOptions = [...formData.correct_options];
+    const index = currentCorrectOptions.indexOf(option);
+    
+    if (index > -1) {
+      // Remove from correct options
+      currentCorrectOptions.splice(index, 1);
+    } else {
+      // Add to correct options
+      currentCorrectOptions.push(option);
+    }
+    
+    setFormData(prev => ({ ...prev, correct_options: currentCorrectOptions }));
+    
+    // Clear error for correct options
+    if (errors.correct_option) {
+      setErrors((prev) => ({ ...prev, correct_option: "" }));
+    }
+  };
+
+  const handleSingleCorrectChange = (value: string) => {
+    setFormData(prev => ({ ...prev, correct_option: value }));
+    // Clear error for correct option
+    if (errors.correct_option) {
+      setErrors((prev) => ({ ...prev, correct_option: "" }));
+    }
+  };
+
+  const handleMultipleCorrectToggle = (enabled: boolean) => {
+    setIsMultipleCorrect(enabled);
+    
+    if (enabled) {
+      // Converting from single to multiple - add the single option to the array
+      const singleOption = formData.correct_option;
+      setFormData(prev => ({
+        ...prev,
+        correct_options: singleOption ? [singleOption] : [],
+        correct_option: ""
+      }));
+    } else {
+      // Converting from multiple to single - take the first option
+      const firstOption = formData.correct_options.length > 0 ? formData.correct_options[0] : "";
+      setFormData(prev => ({
+        ...prev,
+        correct_option: firstOption,
+        correct_options: []
+      }));
+    }
+    
+    // Clear any existing errors
+    setErrors(prev => ({ ...prev, correct_option: "" }));
   };
 
   const renderOptionsSection = () => {
@@ -251,6 +434,29 @@ export default function QuestionEditorScreen() {
           </Button>
         </View>
 
+        {/* Multiple Correct Toggle */}
+        <View style={styles.multipleCorrectToggle}>
+          <View style={styles.toggleHeader}>
+            <Text
+              variant="bodyLarge"
+              style={[styles.toggleLabel, { color: theme.colors.onSurface }]}
+            >
+              Multiple Correct Answers
+            </Text>
+            <Switch
+              value={isMultipleCorrect}
+              onValueChange={handleMultipleCorrectToggle}
+              color={theme.colors.primary}
+            />
+          </View>
+          <HelperText type="info" visible={true}>
+            {isMultipleCorrect 
+              ? "Select multiple options as correct answers (e.g., Q2: A, C)" 
+              : "Select only one correct answer"
+            }
+          </HelperText>
+        </View>
+
         {errors.options ? (
           <HelperText type="error" visible={true}>
             {errors.options}
@@ -259,19 +465,83 @@ export default function QuestionEditorScreen() {
 
         {Object.entries(formData.options).map(([key, value]) => (
           <View key={key} style={styles.optionRow}>
-            <TextInput
-              label={`Option ${key}`}
-              value={value}
-              onChangeText={(text) => updateOption(key, text)}
-              style={styles.optionInput}
-              mode="outlined"
-              right={
-                <TextInput.Icon
-                  icon="close"
-                  onPress={() => removeOption(key)}
-                />
-              }
-            />
+            <View style={styles.optionContainer}>
+              <TextInput
+                label={`Option ${key}`}
+                placeholder={`Enter text for option ${key}`}
+                value={value}
+                onChangeText={(text) => updateOption(key, text)}
+                style={styles.optionInput}
+                mode="outlined"
+                right={
+                  <TextInput.Icon
+                    icon="close"
+                    onPress={() => removeOption(key)}
+                  />
+                }
+              />
+              
+              {/* Correct Answer Selector */}
+              <View style={styles.correctAnswerSelector}>
+                {isMultipleCorrect ? (
+                  <TouchableOpacity
+                    style={[
+                      styles.checkboxContainer,
+                      {
+                        backgroundColor: formData.correct_options.includes(key)
+                          ? theme.colors.primary
+                          : 'transparent',
+                        borderColor: formData.correct_options.includes(key)
+                          ? theme.colors.primary
+                          : theme.colors.outline,
+                      },
+                    ]}
+                    onPress={() => toggleCorrectOption(key)}
+                  >
+                    {formData.correct_options.includes(key) && (
+                      <Ionicons
+                        name="checkmark"
+                        size={16}
+                        color={theme.colors.onPrimary}
+                      />
+                    )}
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={[
+                      styles.radioContainer,
+                      {
+                        backgroundColor: formData.correct_option === key
+                          ? theme.colors.primary
+                          : 'transparent',
+                        borderColor: formData.correct_option === key
+                          ? theme.colors.primary
+                          : theme.colors.outline,
+                      },
+                    ]}
+                    onPress={() => handleSingleCorrectChange(key)}
+                  >
+                    {formData.correct_option === key && (
+                      <View style={[styles.radioInner, { backgroundColor: theme.colors.onPrimary }]} />
+                    )}
+                  </TouchableOpacity>
+                )}
+                <Text
+                  variant="bodySmall"
+                  style={[
+                    styles.correctLabel,
+                    { 
+                      color: (isMultipleCorrect && formData.correct_options.includes(key)) ||
+                             (!isMultipleCorrect && formData.correct_option === key)
+                        ? theme.colors.primary
+                        : theme.colors.onSurfaceVariant
+                    }
+                  ]}
+                >
+                  {isMultipleCorrect ? 'Correct' : 'Correct'}
+                </Text>
+              </View>
+            </View>
           </View>
         ))}
 
@@ -285,6 +555,49 @@ export default function QuestionEditorScreen() {
           >
             No options added yet. Click "Add Option" to get started.
           </Text>
+        )}
+
+        {/* Selected Correct Answers Preview */}
+        {Object.keys(formData.options).length > 0 && (
+          <View style={styles.correctAnswersPreview}>
+            <Text
+              variant="bodyMedium"
+              style={[styles.previewLabel, { color: theme.colors.onSurface }]}
+            >
+              Selected Correct Answer{isMultipleCorrect ? 's' : ''}:
+            </Text>
+            {isMultipleCorrect ? (
+              <View style={styles.correctAnswersContainer}>
+                {formData.correct_options.length > 0 ? (
+                  formData.correct_options.map(option => (
+                    <View key={option} style={[styles.correctAnswerChip, { backgroundColor: theme.colors.primary }]}>
+                      <Text style={[styles.correctAnswerChipText, { color: theme.colors.onPrimary }]}>
+                        {option}
+                      </Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={[styles.noSelectionText, { color: theme.colors.onSurfaceVariant }]}>
+                    None selected
+                  </Text>
+                )}
+              </View>
+            ) : (
+              <Text
+                variant="bodyLarge"
+                style={[
+                  styles.singleCorrectAnswer,
+                  { 
+                    color: formData.correct_option 
+                      ? theme.colors.primary 
+                      : theme.colors.onSurfaceVariant 
+                  }
+                ]}
+              >
+                {formData.correct_option || 'None selected'}
+              </Text>
+            )}
+          </View>
         )}
       </View>
     );
@@ -501,31 +814,44 @@ export default function QuestionEditorScreen() {
 
             <TextInput
               label="Correct Answer *"
-              value={formData.correct_option}
-              onChangeText={(text) =>
-                updateFormData("correct_option", 
-                  formData.question_type === "fill_blanks" ? text : text.toUpperCase()
-                )
-              }
+              value={isMultipleCorrect ? formData.correct_options.join(", ") : formData.correct_option}
+              onChangeText={(text) => {
+                if (formData.question_type === "fill_blanks") {
+                  updateFormData("correct_option", text);
+                } else if (isMultipleCorrect) {
+                  // For multiple correct, parse comma-separated values
+                  const options = text.split(",").map(opt => opt.trim().toUpperCase()).filter(opt => opt);
+                  setFormData(prev => ({ ...prev, correct_options: options }));
+                } else {
+                  updateFormData("correct_option", text.toUpperCase());
+                }
+              }}
               mode="outlined"
               placeholder={
                 formData.question_type === "fill_blanks" 
                   ? "Enter expected answer text" 
-                  : hasOptions 
-                    ? "A, B, C, D..." 
-                    : "Enter correct answer"
+                  : isMultipleCorrect
+                    ? "A, C, E (comma-separated)"
+                    : hasOptions 
+                      ? "A, B, C, D..." 
+                      : "Enter correct answer"
               }
               style={styles.input}
               error={!!errors.correct_option}
+              disabled={hasOptions && Object.keys(formData.options).length > 0} // Disable text input when options are available
             />
 
             <HelperText type={errors.correct_option ? "error" : "info"} visible={true}>
               {errors.correct_option || 
                 (formData.question_type === "fill_blanks"
                   ? "For fill-in-the-blanks, enter the expected answer text"
-                  : hasOptions
-                    ? "Select the letter that corresponds to the correct option"
-                    : "Enter the correct answer")
+                  : hasOptions && Object.keys(formData.options).length > 0
+                    ? (isMultipleCorrect 
+                        ? "Select multiple correct options using the checkboxes below"
+                        : "Select the correct option using the radio buttons below")
+                    : isMultipleCorrect
+                      ? "Enter multiple correct answers separated by commas (e.g., A, C, E)"
+                      : "Enter the correct answer")
               }
             </HelperText>
           </View>
@@ -837,5 +1163,92 @@ const styles = StyleSheet.create({
   actionButtonText: {
     fontSize: 16,
     fontWeight: "600",
+  },
+  // New styles for multiple correct answers
+  multipleCorrectToggle: {
+    marginBottom: 16,
+  },
+  toggleHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  toggleLabel: {
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  optionContainer: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  correctAnswerSelector: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 8,
+    minWidth: 60,
+  },
+  checkboxContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 4,
+    borderWidth: 2,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  radioContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  radioInner: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  correctLabel: {
+    fontSize: 12,
+    fontWeight: "500",
+    textAlign: "center",
+  },
+  correctAnswersPreview: {
+    marginTop: 16,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: "rgba(139, 92, 246, 0.1)",
+  },
+  previewLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 8,
+  },
+  correctAnswersContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  correctAnswerChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    minWidth: 32,
+    alignItems: "center",
+  },
+  correctAnswerChipText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  noSelectionText: {
+    fontStyle: "italic",
+  },
+  singleCorrectAnswer: {
+    fontSize: 18,
+    fontWeight: "700",
   },
 });
