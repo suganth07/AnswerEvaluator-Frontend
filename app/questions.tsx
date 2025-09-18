@@ -32,6 +32,7 @@ interface Question {
   paper_id: number;
   question_number: number;
   question_text: string;
+  question_format: string;
   correct_option: string;
   correct_options?: string[]; // Support for multiple correct answers
   page_number: number;
@@ -249,8 +250,25 @@ export default function QuestionsScreen() {
             </Text>
             {(() => {
               // Handle both single and multiple correct answers
-              const correctAnswers = question.correct_options || (question.correct_option ? [question.correct_option] : []);
+              let correctAnswers: string[] = [];
               
+              // For multiple choice questions, prioritize correct_options
+              if (question.question_format === 'multiple_choice') {
+                if (question.correct_options && Array.isArray(question.correct_options) && question.correct_options.length > 0) {
+                  correctAnswers = question.correct_options;
+                } else if (question.correct_option) {
+                  // Fallback: split comma-separated values or use single value
+                  correctAnswers = question.correct_option.includes(',') 
+                    ? question.correct_option.split(',').map(opt => opt.trim())
+                    : [question.correct_option];
+                }
+              } else {
+                // For non-multiple choice (text) questions, always use correct_option
+                if (question.correct_option && question.correct_option.trim()) {
+                  correctAnswers = [question.correct_option.trim()];
+                }
+              }
+
               if (correctAnswers.length === 0) {
                 return (
                   <Chip
@@ -279,7 +297,8 @@ export default function QuestionsScreen() {
                   ]}
                   compact
                 >
-                  {answer.toUpperCase()}
+                  {/* For multiple choice, show option letter; for text answers, show the full text */}
+                  {question.question_format === 'multiple_choice' ? answer.toUpperCase() : answer}
                 </Chip>
               ));
             })()}

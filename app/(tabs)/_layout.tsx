@@ -77,21 +77,7 @@ export default function TabsLayout() {
           ),
         }}
       />
-      <Tabs.Screen
-        name="submissions"
-        options={{
-          title: "Submissions",
-          tabBarIcon: ({ color, size, focused }) => (
-            <View style={{ alignItems: "center" }}>
-              <Ionicons
-                name={focused ? "documents" : "documents-outline"}
-                size={size + 2}
-                color={color}
-              />
-            </View>
-          ),
-        }}
-      />
+
       <Tabs.Screen
         name="student"
         options={{

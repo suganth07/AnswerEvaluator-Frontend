@@ -7,13 +7,12 @@ const getAPIUrl = () => {
   if (Platform.OS === "android") {
     // For Android Expo Go, use your computer's IP address
     // Updated to use your actual local IP address
-    return "http://10.128.13.32:3000";
+    return "http://10.136.69.32:3000";
   }
-  return "http://10.128.13.32:3000"; // Use same IP for iOS as well
+  return "http://10.136.69.32:3000"; // Use same IP for iOS as well
 };
 
 const API_BASE_URL = getAPIUrl();
-
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000, // Increased timeout for image uploads
@@ -180,6 +179,54 @@ export const questionService = {
   // Delete a question
   deleteQuestion: async (questionId: string) => {
     const response = await api.delete(`/api/questions/${questionId}`);
+    return response.data;
+  },
+};
+
+export const manualTestService = {
+  // Create a new manual test
+  create: async (testData: {
+    testName: string;
+    questions: Array<{
+      questionNumber: number;
+      questionText: string;
+      isMultipleChoice: boolean;
+      options: Array<{
+        id: string;
+        text: string;
+        isCorrect: boolean;
+        weight: number;
+      }>;
+      totalMarks: number;
+    }>;
+  }) => {
+    const response = await api.post("/api/manual-tests/create-manual", testData);
+    return response.data;
+  },
+
+  // Get manual test details
+  getDetails: async (testId: string) => {
+    const response = await api.get(`/api/manual-tests/manual/${testId}`);
+    return response.data;
+  },
+
+  // Update manual test
+  update: async (testId: string, testData: {
+    testName: string;
+    questions: Array<{
+      questionNumber: number;
+      questionText: string;
+      isMultipleChoice: boolean;
+      options: Array<{
+        id: string;
+        text: string;
+        isCorrect: boolean;
+        weight: number;
+      }>;
+      totalMarks: number;
+    }>;
+  }) => {
+    const response = await api.put(`/api/manual-tests/manual/${testId}`, testData);
     return response.data;
   },
 };

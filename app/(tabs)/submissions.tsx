@@ -478,7 +478,7 @@ export default function SubmissionsScreen() {
           {paperId && (
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => router.push("/(tabs)/submissions")}
+              onPress={() => router.back()}
             >
               <Ionicons name="arrow-back" size={24} color="white" />
             </TouchableOpacity>

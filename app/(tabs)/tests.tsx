@@ -61,8 +61,11 @@ export default function TestsScreen() {
 
   const viewSubmissions = (paper: Paper) => {
     router.push({
-      pathname: "/(tabs)/submissions",
-      params: { paperId: paper.id.toString() }
+      pathname: "/test-submissions",
+      params: { 
+        paperId: paper.id.toString(),
+        paperName: paper.name
+      }
     });
   };
 
@@ -367,6 +370,34 @@ export default function TestsScreen() {
               {papers.length} test{papers.length !== 1 ? "s" : ""} created
             </Text>
           </View>
+          <View style={styles.headerButtonContainer}>
+            <TouchableOpacity
+              style={styles.headerAddButton}
+              onPress={() => router.push("/upload")}
+            >
+              <LinearGradient
+                colors={isDarkMode ? ["#6366F1", "#8B5CF6"] : ["#6366F1", "#8B5CF6"]}
+                style={styles.headerAddButtonGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <Ionicons name="cloud-upload" size={18} color="white" />
+              </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.headerAddButton, { marginLeft: 8 }]}
+              onPress={() => router.push("/manual-test-setup")}
+            >
+              <LinearGradient
+                colors={isDarkMode ? ["#22C55E", "#16A34A"] : ["#22C55E", "#16A34A"]}
+                style={styles.headerAddButtonGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <Ionicons name="create" size={18} color="white" />
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
           {/* <View style={styles.headerButtonContainer}>
             <TouchableOpacity
               style={styles.headerAddButton}
@@ -651,6 +682,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   headerButtonContainer: {
+    flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
   },

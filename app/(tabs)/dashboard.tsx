@@ -310,58 +310,74 @@ export default function DashboardScreen() {
       ]}
     >
       {stats.recentPapers.map((paper, index) => (
-        <TouchableOpacity
-          key={paper.id}
-          onPress={() =>
-            router.push({
-              pathname: "/questions",
-              params: { paperId: paper.id, paperName: paper.name },
-            })
-          }
-          style={styles.activityListItem}
-        >
-          <View
-            style={[
-              styles.activityItemIcon,
-              { backgroundColor: isDarkMode ? "#374151" : "#F3F4F6" },
-            ]}
+        <View key={paper.id} style={styles.activityListItem}>
+          <TouchableOpacity
+            onPress={() =>
+              router.push({
+                pathname: "/questions",
+                params: { paperId: paper.id, paperName: paper.name },
+              })
+            }
+            style={styles.activityItemLeft}
           >
-            <Ionicons
-              name="document-text"
-              size={20}
-              color={theme.colors.onSurface}
-            />
-          </View>
-          <View style={styles.activityItemContent}>
-            <Text
-              variant="bodyMedium"
+            <View
               style={[
-                styles.activityItemTitle,
-                { color: theme.colors.onSurface },
+                styles.activityItemIcon,
+                { backgroundColor: isDarkMode ? "#374151" : "#F3F4F6" },
               ]}
             >
-              {paper.name}
-            </Text>
+              <Ionicons
+                name="document-text"
+                size={20}
+                color={theme.colors.onSurface}
+              />
+            </View>
+            <View style={styles.activityItemContent}>
+              <Text
+                variant="bodyMedium"
+                style={[
+                  styles.activityItemTitle,
+                  { color: theme.colors.onSurface },
+                ]}
+              >
+                {paper.name}
+              </Text>
+              <Text
+                variant="bodySmall"
+                style={[
+                  styles.activityItemSubtitle,
+                  { color: theme.colors.onSurfaceVariant },
+                ]}
+              >
+                {paper.question_count} questions
+              </Text>
+            </View>
+          </TouchableOpacity>
+          
+          <View style={styles.activityItemActions}>
             <Text
               variant="bodySmall"
               style={[
-                styles.activityItemSubtitle,
+                styles.activityItemTime,
                 { color: theme.colors.onSurfaceVariant },
               ]}
             >
-              {paper.question_count} questions
+              {formatDate(paper.uploaded_at)}
             </Text>
+            <TouchableOpacity
+              style={[styles.submissionButton, { backgroundColor: theme.colors.primary }]}
+              onPress={() =>
+                router.push({
+                  pathname: "/test-submissions",
+                  params: { paperId: paper.id.toString(), paperName: paper.name },
+                })
+              }
+            >
+              <Ionicons name="people" size={14} color="white" />
+              <Text style={styles.submissionButtonText}>Results</Text>
+            </TouchableOpacity>
           </View>
-          <Text
-            variant="bodySmall"
-            style={[
-              styles.activityItemTime,
-              { color: theme.colors.onSurfaceVariant },
-            ]}
-          >
-            {formatDate(paper.uploaded_at)}
-          </Text>
-        </TouchableOpacity>
+        </View>
       ))}
     </View>
   );
@@ -485,16 +501,16 @@ export default function DashboardScreen() {
           <View style={styles.featureGrid}>
             <FeatureCard
               title="Upload Test"
-              subtitle="Scan and analyze product ingredients instantly"
+              subtitle="Scan and analyze test papers instantly"
               icon="cloud-upload-outline"
               onPress={() => router.push("/upload")}
               isLarge={true}
             />
             <FeatureCard
-              title="Analytics"
-              subtitle="Generate personalized analytics routines"
-              icon="bar-chart-outline"
-              onPress={() => router.push("/(tabs)/tests")}
+              title="Manual Test"
+              subtitle="Create test manually without OMR"
+              icon="create-outline"
+              onPress={() => router.push("/manual-test-setup")}
               isLarge={true}
             />
           </View>
@@ -711,6 +727,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 12,
+    justifyContent: "space-between",
+  },
+  activityItemLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
   },
   activityItemIcon: {
     width: 40,
@@ -730,8 +752,25 @@ const styles = StyleSheet.create({
   activityItemSubtitle: {
     fontSize: 12,
   },
+  activityItemActions: {
+    alignItems: "flex-end",
+  },
   activityItemTime: {
     fontSize: 12,
+    marginBottom: 8,
+  },
+  submissionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 4,
+  },
+  submissionButtonText: {
+    color: "white",
+    fontSize: 12,
+    fontWeight: "600",
   },
   bottomSpacer: {
     height: 100,
