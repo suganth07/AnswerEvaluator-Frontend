@@ -339,7 +339,7 @@ export default function TestSubmissionsScreen() {
             </View>
             <Avatar.Text
               size={40}
-              label={item.student_name.substring(0, 2).toUpperCase()}
+              label={item.student_name ? item.student_name.substring(0, 2).toUpperCase() : 'NA'}
               style={[styles.studentAvatar, { backgroundColor: theme.colors.primary }]}
               labelStyle={{ fontSize: 14, color: theme.colors.onPrimary }}
             />
@@ -349,7 +349,7 @@ export default function TestSubmissionsScreen() {
                 style={[styles.studentName, { color: theme.colors.onSurface }]}
                 numberOfLines={1}
               >
-                {item.student_name}
+                {item.student_name || 'Unknown Student'}
               </Text>
               <Text
                 variant="bodySmall"

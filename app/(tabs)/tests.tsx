@@ -26,6 +26,8 @@ interface Paper {
   question_count: number;
   total_pages: number;
   question_type: string;
+  pendingCount?: number;
+  evaluatedCount?: number;
 }
 
 export default function TestsScreen() {
@@ -42,7 +44,45 @@ export default function TestsScreen() {
   const fetchPapers = async () => {
     try {
       const data = await paperService.getAll();
-      setPapers(data);
+      
+      // Fetch submission counts for each paper
+      const papersWithCounts = await Promise.all(
+        data.map(async (paper: Paper) => {
+          try {
+            // Fetch pending submissions count
+            const pendingResponse = await fetch(`http://10.136.69.32:3000/api/submissions/pending-files/${paper.id}`);
+            const evaluatedResponse = await fetch(`http://10.136.69.32:3000/api/submissions/paper/${paper.id}/status/evaluated`);
+            
+            let pendingCount = 0;
+            let evaluatedCount = 0;
+            
+            if (pendingResponse.ok) {
+              const pendingData = await pendingResponse.json();
+              pendingCount = pendingData.pendingSubmissions?.length || 0;
+            }
+            
+            if (evaluatedResponse.ok) {
+              const evaluatedData = await evaluatedResponse.json();
+              evaluatedCount = evaluatedData.submissions?.length || 0;
+            }
+            
+            return {
+              ...paper,
+              pendingCount,
+              evaluatedCount
+            };
+          } catch (error) {
+            console.error(`Error fetching counts for paper ${paper.id}:`, error);
+            return {
+              ...paper,
+              pendingCount: 0,
+              evaluatedCount: 0
+            };
+          }
+        })
+      );
+      
+      setPapers(papersWithCounts);
     } catch (error: any) {
       Alert.alert(
         "Error",
@@ -61,7 +101,7 @@ export default function TestsScreen() {
 
   const viewSubmissions = (paper: Paper) => {
     router.push({
-      pathname: "/test-submissions",
+      pathname: "/(tabs)/submissions",
       params: { 
         paperId: paper.id.toString(),
         paperName: paper.name
@@ -234,26 +274,10 @@ export default function TestsScreen() {
         </View>
 
         <View style={styles.cardStats}>
-          <View style={styles.statItem}>
-            <Ionicons
-              name="help-circle-outline"
-              size={16}
-              color={theme.colors.onSurfaceVariant}
-            />
-            <Text
-              variant="bodySmall"
-              style={[
-                styles.statText,
-                { color: theme.colors.onSurfaceVariant },
-              ]}
-            >
-              {item.question_count} Questions
-            </Text>
-          </View>
-          {item.total_pages && item.total_pages > 1 && (
+          <View style={styles.statRow}>
             <View style={styles.statItem}>
               <Ionicons
-                name="document-outline"
+                name="help-circle-outline"
                 size={16}
                 color={theme.colors.onSurfaceVariant}
               />
@@ -264,21 +288,84 @@ export default function TestsScreen() {
                   { color: theme.colors.onSurfaceVariant },
                 ]}
               >
-                {item.total_pages} Pages
+                {item.question_count} Questions
               </Text>
             </View>
-          )}
-          <View
-            style={[
-              styles.typeChip,
-              { backgroundColor: questionTypeInfo.bgColor },
-            ]}
-          >
-            <Text
-              variant="labelSmall"
-              style={[styles.typeChipText, { color: questionTypeInfo.color }]}
+            {item.total_pages && item.total_pages > 1 && (
+              <View style={styles.statItem}>
+                <Ionicons
+                  name="document-outline"
+                  size={16}
+                  color={theme.colors.onSurfaceVariant}
+                />
+                <Text
+                  variant="bodySmall"
+                  style={[
+                    styles.statText,
+                    { color: theme.colors.onSurfaceVariant },
+                  ]}
+                >
+                  {item.total_pages} Pages
+                </Text>
+              </View>
+            )}
+            <View
+              style={[
+                styles.typeChip,
+                { backgroundColor: questionTypeInfo.bgColor },
+              ]}
             >
-              {questionTypeInfo.label}
+              <Text
+                variant="labelSmall"
+                style={[styles.typeChipText, { color: questionTypeInfo.color }]}
+              >
+                {questionTypeInfo.label}
+              </Text>
+            </View>
+          </View>
+          
+          {/* Submission Stats Row */}
+          <View style={styles.submissionStatsRow}>
+            <View style={styles.statItem}>
+              <Ionicons
+                name="time-outline"
+                size={16}
+                color="#F59E0B"
+              />
+              <Text
+                variant="bodySmall"
+                style={[
+                  styles.statText,
+                  { color: "#F59E0B" },
+                ]}
+              >
+                {item.pendingCount || 0} Pending
+              </Text>
+            </View>
+            <View style={styles.statItem}>
+              <Ionicons
+                name="checkmark-circle-outline"
+                size={16}
+                color="#10B981"
+              />
+              <Text
+                variant="bodySmall"
+                style={[
+                  styles.statText,
+                  { color: "#10B981" },
+                ]}
+              >
+                {item.evaluatedCount || 0} Evaluated
+              </Text>
+            </View>
+            <Text
+              variant="bodySmall"
+              style={[
+                styles.totalSubmissionsText,
+                { color: theme.colors.onSurfaceVariant },
+              ]}
+            >
+              Total: {(item.pendingCount || 0) + (item.evaluatedCount || 0)} submissions
             </Text>
           </View>
         </View>
@@ -310,13 +397,27 @@ export default function TestsScreen() {
             style={[styles.actionButton, styles.primaryActionButton]}
             onPress={() => viewSubmissions(item)}
           >
-            <Ionicons name="people-outline" size={16} color="white" />
-            <Text
-              variant="bodySmall"
-              style={[styles.actionButtonText, { color: "white" }]}
+            <LinearGradient
+              colors={["#6366F1", "#8B5CF6"]}
+              style={styles.actionButtonGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
             >
-              Submissions
-            </Text>
+              <Ionicons name="people-outline" size={16} color="white" />
+              <Text
+                variant="bodySmall"
+                style={[styles.actionButtonText, { color: "white" }]}
+              >
+                Submissions
+              </Text>
+              {((item.pendingCount || 0) + (item.evaluatedCount || 0)) > 0 && (
+                <View style={styles.submissionBadge}>
+                  <Text style={styles.submissionBadgeText}>
+                    {(item.pendingCount || 0) + (item.evaluatedCount || 0)}
+                  </Text>
+                </View>
+              )}
+            </LinearGradient>
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -575,11 +676,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   cardStats: {
+    marginBottom: 20,
+  },
+  statRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 20,
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 8,
+  },
+  submissionStatsRow: {
+    flexDirection: "row",
+    alignItems: "center",
     flexWrap: "wrap",
     gap: 12,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(0,0,0,0.1)",
   },
   statItem: {
     flexDirection: "row",
@@ -589,11 +702,15 @@ const styles = StyleSheet.create({
   statText: {
     fontSize: 13,
   },
+  totalSubmissionsText: {
+    fontSize: 12,
+    fontStyle: "italic",
+    marginLeft: "auto",
+  },
   typeChip: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
-    marginLeft: "auto",
   },
   typeChipText: {
     fontSize: 12,
@@ -613,12 +730,37 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 6,
   },
+  actionButtonGradient: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    gap: 6,
+  },
   primaryActionButton: {
     backgroundColor: "#6366F1",
+    overflow: "hidden",
   },
   actionButtonText: {
     fontSize: 13,
     fontWeight: "500",
+  },
+  submissionBadge: {
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginLeft: 4,
+    minWidth: 20,
+    alignItems: "center",
+  },
+  submissionBadgeText: {
+    color: "white",
+    fontSize: 11,
+    fontWeight: "600",
   },
   loadingContainer: {
     flex: 1,
