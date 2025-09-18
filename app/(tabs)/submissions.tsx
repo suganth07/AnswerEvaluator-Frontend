@@ -7,15 +7,15 @@ import {
   TouchableOpacity,
   Dimensions,
   Alert,
+  TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Text, Card, Avatar, Chip, ActivityIndicator } from "react-native-paper";
+import { Text, Card, Avatar, Chip, ActivityIndicator, Button, IconButton } from "react-native-paper";
 import { useTheme } from "../../context/ThemeContext";
 import { paperService, submissionService } from "../../services/api";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { PieChart } from "react-native-chart-kit";
 
 const { width } = Dimensions.get("window");
 
@@ -31,15 +31,18 @@ interface Submission {
   id: number;
   paper_id: number;
   student_name: string;
+  roll_no: string;
   score: number | null | undefined;
   total_questions: number | null | undefined;
   percentage: number | null | undefined;
   evaluation_method: string;
+  evaluation_status: string;
   submitted_at: string;
 }
 
 interface PaperWithSubmissions extends Paper {
-  submissions: Submission[];
+  pendingSubmissions: Submission[];
+  evaluatedSubmissions: Submission[];
 }
 
 export default function SubmissionsScreen() {
@@ -49,6 +52,9 @@ export default function SubmissionsScreen() {
   const [papers, setPapers] = useState<PaperWithSubmissions[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [pendingSearch, setPendingSearch] = useState('');
+  const [evaluatedSearch, setEvaluatedSearch] = useState('');
+  const [evaluatingId, setEvaluatingId] = useState<number | null>(null);
   const { theme, isDarkMode } = useTheme();
 
   useEffect(() => {
@@ -62,11 +68,18 @@ export default function SubmissionsScreen() {
       if (paperId) {
         // Fetch specific paper only
         const paper = await paperService.getDetails(paperId);
-        const submissions = await submissionService.getByPaperId(parseInt(paperId));
+        
+        // Fetch pending and evaluated submissions separately
+        const pendingResponse = await fetch(`http://10.128.13.32:3000/api/submissions/paper/${paperId}/status/pending`);
+        const evaluatedResponse = await fetch(`http://10.128.13.32:3000/api/submissions/paper/${paperId}/status/evaluated`);
+        
+        const pendingSubmissions = pendingResponse.ok ? await pendingResponse.json() : [];
+        const evaluatedSubmissions = evaluatedResponse.ok ? await evaluatedResponse.json() : [];
         
         setPapers([{
           ...paper,
-          submissions: submissions || []
+          pendingSubmissions: pendingSubmissions || [],
+          evaluatedSubmissions: evaluatedSubmissions || []
         }]);
       } else {
         // Fetch all papers
@@ -76,16 +89,23 @@ export default function SubmissionsScreen() {
         const papersWithSubmissions = await Promise.all(
           papersData.map(async (paper: Paper) => {
             try {
-              const submissions = await submissionService.getByPaperId(paper.id);
+              const pendingResponse = await fetch(`http://10.128.13.32:3000/api/submissions/paper/${paper.id}/status/pending`);
+              const evaluatedResponse = await fetch(`http://10.128.13.32:3000/api/submissions/paper/${paper.id}/status/evaluated`);
+              
+              const pendingSubmissions = pendingResponse.ok ? await pendingResponse.json() : [];
+              const evaluatedSubmissions = evaluatedResponse.ok ? await evaluatedResponse.json() : [];
+              
               return {
                 ...paper,
-                submissions: submissions || []
+                pendingSubmissions: pendingSubmissions || [],
+                evaluatedSubmissions: evaluatedSubmissions || []
               };
             } catch (error) {
               console.error(`Error fetching submissions for paper ${paper.id}:`, error);
               return {
                 ...paper,
-                submissions: []
+                pendingSubmissions: [],
+                evaluatedSubmissions: []
               };
             }
           })
@@ -107,6 +127,43 @@ export default function SubmissionsScreen() {
     fetchSubmissionsData();
   };
 
+  const handleEvaluateSubmission = async (submissionId: number) => {
+    setEvaluatingId(submissionId);
+    
+    try {
+      const response = await fetch(`http://10.128.13.32:3000/api/submissions/evaluate/${submissionId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        Alert.alert(
+          'Evaluation Complete!',
+          `Student: ${result.studentName}\nRoll No: ${result.rollNo}\nScore: ${result.score}/${result.totalQuestions} (${result.percentage}%)`,
+          [{ text: 'OK', onPress: () => fetchSubmissionsData() }]
+        );
+      } else {
+        if (result.error === 'Roll number mismatch') {
+          Alert.alert(
+            'Roll Number Mismatch',
+            `${result.message}\n\nPaper Roll No: ${result.paperRollNo}\nEntered Roll No: ${result.enteredRollNo}`,
+            [{ text: 'OK' }]
+          );
+        } else {
+          throw new Error(result.error || 'Evaluation failed');
+        }
+      }
+    } catch (error: any) {
+      Alert.alert('Evaluation Failed', error.message || 'Failed to evaluate submission');
+    } finally {
+      setEvaluatingId(null);
+    }
+  };
+
   const formatDate = (dateString: string) => {
     const now = new Date();
     const date = new Date(dateString);
@@ -126,157 +183,90 @@ export default function SubmissionsScreen() {
     return isNaN(num) ? 0 : num;
   };
 
-  // Calculate score distribution for pie chart
-  const calculateScoreDistribution = (submissions: Submission[]) => {
-    if (submissions.length === 0) {
-      return [
-        { name: "No Data", population: 100, color: "#E5E7EB", legendFontColor: isDarkMode ? "#E5E7EB" : "#374151", legendFontSize: 12 }
-      ];
-    }
-
-    let lowScore = 0;   // 0-40%
-    let midScore = 0;   // 40-80%
-    let highScore = 0;  // 80-100%
-
-    submissions.forEach(submission => {
-      const percentage = safePercentage(submission.percentage);
-      if (percentage < 40) {
-        lowScore++;
-      } else if (percentage < 80) {
-        midScore++;
-      } else {
-        highScore++;
-      }
-    });
-
-    const total = submissions.length;
-    const data = [];
-
-    if (lowScore > 0) {
-      data.push({
-        name: `0-40% (${lowScore})`,
-        population: Math.round((lowScore / total) * 100),
-        color: "#EF4444", // Red
-        legendFontColor: isDarkMode ? "#E5E7EB" : "#374151",
-        legendFontSize: 12
-      });
-    }
-
-    if (midScore > 0) {
-      data.push({
-        name: `40-80% (${midScore})`,
-        population: Math.round((midScore / total) * 100),
-        color: "#F59E0B", // Yellow/Orange
-        legendFontColor: isDarkMode ? "#E5E7EB" : "#374151",
-        legendFontSize: 12
-      });
-    }
-
-    if (highScore > 0) {
-      data.push({
-        name: `80-100% (${highScore})`,
-        population: Math.round((highScore / total) * 100),
-        color: "#22C55E", // Green
-        legendFontColor: isDarkMode ? "#E5E7EB" : "#374151",
-        legendFontSize: 12
-      });
-    }
-
-    return data.length > 0 ? data : [
-      { name: "No Data", population: 100, color: "#E5E7EB", legendFontColor: isDarkMode ? "#E5E7EB" : "#374151", legendFontSize: 12 }
-    ];
-  };
-
-  // Score Distribution Chart Component
-  const ScoreDistributionChart = ({ submissions }: { submissions: Submission[] }) => {
-    const chartData = calculateScoreDistribution(submissions);
-    
-    if (submissions.length === 0) {
-      return (
-        <View style={[styles.noDataContainer, { backgroundColor: isDarkMode ? "rgba(255, 255, 255, 0.05)" : "rgba(99, 102, 241, 0.05)" }]}>
-          <Text variant="bodyMedium" style={{ color: theme.colors.onSurface }}>
-            No submissions data available for chart
-          </Text>
-        </View>
-      );
-    }
-
-    return (
-      <View style={[styles.chartContainer, { backgroundColor: isDarkMode ? "rgba(255, 255, 255, 0.05)" : "rgba(99, 102, 241, 0.05)" }]}>
-        <Text variant="titleMedium" style={[styles.chartTitle, { color: theme.colors.onSurface }]}>
-          Score Distribution ({submissions.length} students)
-        </Text>
-        <PieChart
-          data={chartData}
-          width={Math.min(width - 40, 350)}
-          height={180}
-          chartConfig={{
-            backgroundGradientFrom: theme.colors.background,
-            backgroundGradientTo: theme.colors.background,
-            color: (opacity = 1) => `rgba(99, 102, 241, ${opacity})`,
-            strokeWidth: 2,
-            barPercentage: 0.5,
-            useShadowColorFromDataset: false,
-          }}
-          accessor="population"
-          backgroundColor="transparent"
-          paddingLeft="15"
-          center={[0, 0]}
-          absolute
-        />
-      </View>
-    );
-  };
-
   const getScoreColor = (percentage: number) => {
     if (percentage >= 80) return "#22C55E"; // Green
     if (percentage >= 60) return "#F59E0B"; // Yellow
     return "#EF4444"; // Red
   };
 
-  const getEvaluationMethodIcon = (method: string) => {
-    switch (method) {
-      case "omr_detection":
-        return "scan-outline";
-      case "fill_blanks_ai":
-        return "create-outline";
-      case "gemini_vision":
-        return "eye-outline";
-      default:
-        return "document-text-outline";
-    }
+  const filterSubmissions = (submissions: Submission[], searchTerm: string) => {
+    if (!searchTerm.trim()) return submissions;
+    return submissions.filter(sub => 
+      sub.roll_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      sub.student_name?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
   };
 
-  const getEvaluationMethodLabel = (method: string) => {
-    switch (method) {
-      case "omr_detection":
-        return "OMR";
-      case "fill_blanks_ai":
-        return "Fill Blanks";
-      case "gemini_vision":
-        return "AI Vision";
-      default:
-        return "Traditional";
-    }
-  };
+  const PendingSubmissionCard = ({ submission, paper }: { submission: Submission; paper: Paper }) => (
+    <View style={[styles.submissionCard, { backgroundColor: theme.colors.surface }]}>
+      <View style={styles.submissionCardHeader}>
+        <View style={styles.studentInfo}>
+          <Avatar.Text
+            size={36}
+            label={submission.student_name.substring(0, 2).toUpperCase()}
+            style={[styles.studentAvatar, { backgroundColor: '#F59E0B' }]}
+            labelStyle={{ fontSize: 14, color: 'white' }}
+          />
+          <View style={styles.studentDetails}>
+            <Text
+              variant="titleSmall"
+              style={[styles.studentName, { color: theme.colors.onSurface }]}
+              numberOfLines={1}
+            >
+              {submission.student_name}
+            </Text>
+            <Text
+              variant="bodySmall"
+              style={[styles.rollNumber, { color: theme.colors.primary }]}
+            >
+              Roll: {submission.roll_no}
+            </Text>
+            <Text
+              variant="bodySmall"
+              style={[styles.submissionTime, { color: theme.colors.onSurfaceVariant }]}
+            >
+              {formatDate(submission.submitted_at)}
+            </Text>
+          </View>
+        </View>
+        
+        <View style={styles.actionContainer}>
+          <Chip
+            mode="outlined"
+            compact
+            style={[styles.statusChip, { backgroundColor: '#FEF3C7', borderColor: '#F59E0B' }]}
+            textStyle={{ fontSize: 10, color: '#92400E' }}
+          >
+            Pending
+          </Chip>
+          <Button
+            mode="contained"
+            onPress={() => handleEvaluateSubmission(submission.id)}
+            disabled={evaluatingId === submission.id}
+            loading={evaluatingId === submission.id}
+            style={[styles.evaluateButton, { backgroundColor: theme.colors.primary }]}
+            labelStyle={{ fontSize: 12 }}
+          >
+            {evaluatingId === submission.id ? 'Evaluating...' : 'Evaluate'}
+          </Button>
+        </View>
+      </View>
+    </View>
+  );
 
-  const handleSubmissionPress = (submission: Submission, paper: Paper) => {
-    router.push({
-      pathname: "/submission-detail",
-      params: {
-        submissionId: submission.id,
-        studentName: submission.student_name,
-        paperName: paper.name,
-        score: submission.score || 0,
-        totalQuestions: submission.total_questions || 0,
-        percentage: safePercentage(submission.percentage).toFixed(1)
-      }
-    });
-  };
-
-  const SubmissionCard = ({ submission, paper }: { submission: Submission; paper: Paper }) => (
+  const EvaluatedSubmissionCard = ({ submission, paper }: { submission: Submission; paper: Paper }) => (
     <TouchableOpacity
-      onPress={() => handleSubmissionPress(submission, paper)}
+      onPress={() => router.push({
+        pathname: "/submission-detail",
+        params: {
+          submissionId: submission.id,
+          studentName: submission.student_name,
+          paperName: paper.name,
+          score: submission.score || 0,
+          totalQuestions: submission.total_questions || 0,
+          percentage: safePercentage(submission.percentage).toFixed(1)
+        }
+      })}
       style={[styles.submissionCard, { backgroundColor: theme.colors.surface }]}
     >
       <View style={styles.submissionCardHeader}>
@@ -294,6 +284,12 @@ export default function SubmissionsScreen() {
               numberOfLines={1}
             >
               {submission.student_name}
+            </Text>
+            <Text
+              variant="bodySmall"
+              style={[styles.rollNumber, { color: theme.colors.primary }]}
+            >
+              Roll: {submission.roll_no}
             </Text>
             <Text
               variant="bodySmall"
@@ -330,120 +326,116 @@ export default function SubmissionsScreen() {
           >
             {safePercentage(submission.percentage).toFixed(1)}%
           </Text>
+          <Chip
+            mode="outlined"
+            compact
+            style={[styles.statusChip, { backgroundColor: '#D1FAE5', borderColor: '#10B981' }]}
+            textStyle={{ fontSize: 10, color: '#047857' }}
+          >
+            Evaluated
+          </Chip>
         </View>
-      </View>
-
-      <View style={styles.submissionFooter}>
-        <Chip
-          mode="outlined"
-          compact
-          style={[
-            styles.methodChip,
-            { backgroundColor: isDarkMode ? "#374151" : "#F3F4F6" }
-          ]}
-          textStyle={{ fontSize: 10 }}
-          icon={() => (
-            <Ionicons
-              name={getEvaluationMethodIcon(submission.evaluation_method) as any}
-              size={12}
-              color={theme.colors.onSurfaceVariant}
-            />
-          )}
-        >
-          {getEvaluationMethodLabel(submission.evaluation_method)}
-        </Chip>
-        
-        <Ionicons
-          name="chevron-forward"
-          size={16}
-          color={theme.colors.onSurfaceVariant}
-        />
       </View>
     </TouchableOpacity>
   );
 
-  const PaperSection = ({ paper }: { paper: PaperWithSubmissions }) => (
-    <View style={styles.paperSection}>
-      {/* Paper Header */}
-      <LinearGradient
-        colors={isDarkMode ? ["#374151", "#1F2937"] : ["#6366F1", "#8B5CF6"]}
-        style={styles.paperHeader}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      >
-        <View style={styles.paperHeaderContent}>
-          <View style={styles.paperInfo}>
-            <Text variant="titleLarge" style={styles.paperTitle}>
-              {paper.name}
-            </Text>
-            <Text variant="bodyMedium" style={styles.paperSubtitle}>
-              {paper.question_count} Questions • {paper.question_type}
-            </Text>
-          </View>
-          <View style={styles.paperStats}>
-            <View style={styles.statItem}>
-              <Text variant="titleMedium" style={styles.statNumber}>
-                {paper.submissions.length}
-              </Text>
-              <Text variant="bodySmall" style={styles.statLabel}>
-                Submissions
-              </Text>
-            </View>
+  const SubmissionsSection = ({ 
+    title, 
+    submissions, 
+    searchValue, 
+    onSearchChange, 
+    type 
+  }: { 
+    title: string; 
+    submissions: Submission[]; 
+    searchValue: string; 
+    onSearchChange: (value: string) => void; 
+    type: 'pending' | 'evaluated';
+  }) => {
+    const filteredSubmissions = filterSubmissions(submissions, searchValue);
+    
+    return (
+      <View style={styles.sectionContainer}>
+        <View style={styles.sectionHeader}>
+          <Text variant="titleLarge" style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
+            {title} ({submissions.length})
+          </Text>
+          
+          <View style={styles.searchContainer}>
+            <TextInput
+              style={[styles.searchInput, { 
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.outline,
+                color: theme.colors.onSurface
+              }]}
+              placeholder="Search by roll number or name..."
+              placeholderTextColor={theme.colors.onSurfaceVariant}
+              value={searchValue}
+              onChangeText={onSearchChange}
+            />
+            <IconButton
+              icon="magnify"
+              size={20}
+              iconColor={theme.colors.onSurfaceVariant}
+              style={styles.searchIcon}
+            />
           </View>
         </View>
-      </LinearGradient>
 
-      {/* Score Distribution Chart */}
-      <ScoreDistributionChart submissions={paper.submissions} />
-
-      {/* Submissions List */}
-      <View
-        style={[
-          styles.submissionsContainer,
-          { backgroundColor: theme.colors.background }
-        ]}
-      >
-        {paper.submissions.length > 0 ? (
-          paper.submissions
-            .sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime())
-            .map((submission) => (
-              <SubmissionCard
-                key={submission.id}
-                submission={submission}
-                paper={paper}
+        <View style={styles.submissionsContainer}>
+          {filteredSubmissions.length > 0 ? (
+            filteredSubmissions
+              .sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime())
+              .map((submission) => (
+                type === 'pending' ? (
+                  <PendingSubmissionCard
+                    key={submission.id}
+                    submission={submission}
+                    paper={papers[0]}
+                  />
+                ) : (
+                  <EvaluatedSubmissionCard
+                    key={submission.id}
+                    submission={submission}
+                    paper={papers[0]}
+                  />
+                )
+              ))
+          ) : searchValue.trim() ? (
+            <View style={styles.emptySubmissions}>
+              <Ionicons
+                name="search-outline"
+                size={48}
+                color={theme.colors.onSurfaceVariant}
+                style={{ opacity: 0.5 }}
               />
-            ))
-        ) : (
-          <View style={styles.emptySubmissions}>
-            <Ionicons
-              name="document-outline"
-              size={48}
-              color={theme.colors.onSurfaceVariant}
-              style={{ opacity: 0.5 }}
-            />
-            <Text
-              variant="bodyLarge"
-              style={[
-                styles.emptyText,
-                { color: theme.colors.onSurfaceVariant }
-              ]}
-            >
-              No submissions yet
-            </Text>
-            <Text
-              variant="bodySmall"
-              style={[
-                styles.emptySubtext,
-                { color: theme.colors.onSurfaceVariant }
-              ]}
-            >
-              Students haven't submitted answers for this test
-            </Text>
-          </View>
-        )}
+              <Text
+                variant="bodyLarge"
+                style={[styles.emptyText, { color: theme.colors.onSurfaceVariant }]}
+              >
+                No submissions found for "{searchValue}"
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.emptySubmissions}>
+              <Ionicons
+                name={type === 'pending' ? "time-outline" : "checkmark-circle-outline"}
+                size={48}
+                color={theme.colors.onSurfaceVariant}
+                style={{ opacity: 0.5 }}
+              />
+              <Text
+                variant="bodyLarge"
+                style={[styles.emptyText, { color: theme.colors.onSurfaceVariant }]}
+              >
+                No {type} submissions
+              </Text>
+            </View>
+          )}
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   if (loading) {
     return (
@@ -485,10 +477,10 @@ export default function SubmissionsScreen() {
           )}
           <View style={styles.headerTextContainer}>
             <Text variant="headlineLarge" style={styles.headerTitle}>
-              {paperId && papers[0] ? `${papers[0].name} - Submissions` : "Submissions"}
+              {paperId && papers[0] ? `${papers[0].name}` : "Submissions"}
             </Text>
             <Text variant="bodyLarge" style={styles.headerSubtitle}>
-              {paperId ? "View student submissions for this test" : "View all student submissions and results"}
+              {paperId ? "Manage and evaluate student submissions" : "View all student submissions and results"}
             </Text>
           </View>
         </View>
@@ -507,10 +499,26 @@ export default function SubmissionsScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {papers.length > 0 ? (
-          papers.map((paper) => (
-            <PaperSection key={paper.id} paper={paper} />
-          ))
+        {papers.length > 0 && papers[0] ? (
+          <>
+            {/* Pending Submissions Section */}
+            <SubmissionsSection
+              title="Pending Evaluation"
+              submissions={papers[0].pendingSubmissions || []}
+              searchValue={pendingSearch}
+              onSearchChange={setPendingSearch}
+              type="pending"
+            />
+
+            {/* Evaluated Submissions Section */}
+            <SubmissionsSection
+              title="Evaluated"
+              submissions={papers[0].evaluatedSubmissions || []}
+              searchValue={evaluatedSearch}
+              onSearchChange={setEvaluatedSearch}
+              type="evaluated"
+            />
+          </>
         ) : (
           <View style={styles.emptyState}>
             <Ionicons
@@ -687,8 +695,24 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginBottom: 2,
   },
+  rollNumber: {
+    fontSize: 12,
+    fontWeight: "500",
+  },
   submissionTime: {
     fontSize: 12,
+  },
+  actionContainer: {
+    alignItems: "center",
+    marginLeft: 16,
+  },
+  statusChip: {
+    height: 24,
+    marginBottom: 8,
+  },
+  evaluateButton: {
+    marginTop: 4,
+    minWidth: 80,
   },
   scoreContainer: {
     alignItems: "center",
@@ -767,6 +791,34 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 100,
+  },
+  sectionContainer: {
+    marginBottom: 24,
+    marginHorizontal: 16,
+  },
+  sectionHeader: {
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontWeight: "700",
+    marginBottom: 12,
+  },
+  searchContainer: {
+    position: "relative",
+    marginTop: 8,
+  },
+  searchInput: {
+    height: 44,
+    paddingHorizontal: 16,
+    paddingRight: 50,
+    borderRadius: 12,
+    borderWidth: 1,
+    fontSize: 14,
+  },
+  searchIcon: {
+    position: "absolute",
+    right: 4,
+    top: 2,
   },
   chartContainer: {
     borderRadius: 12,

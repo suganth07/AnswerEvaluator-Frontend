@@ -41,6 +41,18 @@ interface QuestionOptions {
   [key: string]: string | undefined;
 }
 
+interface QuestionWeightages {
+  A?: number;
+  B?: number;
+  C?: number;
+  D?: number;
+  E?: number;
+  F?: number;
+  G?: number;
+  H?: number;
+  [key: string]: number | undefined;
+}
+
 export default function QuestionEditorScreen() {
   const [formData, setFormData] = useState({
     question_number: "",
@@ -50,6 +62,8 @@ export default function QuestionEditorScreen() {
     page_number: "1",
     question_type: "traditional",
     options: {} as QuestionOptions,
+    weightages: {} as QuestionWeightages, // Add weightages support
+    points_per_blank: 1, // Add total marks/points support
   });
   const [hasOptions, setHasOptions] = useState(false);
   const [isMultipleCorrect, setIsMultipleCorrect] = useState(false); // New state for multiple correct toggle
@@ -170,6 +184,8 @@ export default function QuestionEditorScreen() {
             page_number: questionData.page_number.toString(),
             question_type: questionData.question_type,
             options: convertedOptions,
+            weightages: questionData.weightages || {},
+            points_per_blank: questionData.points_per_blank || questionData.pointsPerBlank || 1,
           });
           setHasOptions(
             convertedOptions && Object.keys(convertedOptions).length > 0
@@ -204,10 +220,30 @@ export default function QuestionEditorScreen() {
       newErrors.question_number = "Question number must be a positive number";
     }
 
+    // Validate total marks/points
+    if (!formData.points_per_blank || formData.points_per_blank <= 0) {
+      newErrors.points_per_blank = "Total marks must be greater than 0";
+    }
+
     // Validate correct answers based on single/multiple mode
     if (isMultipleCorrect) {
-      if (!formData.correct_options || formData.correct_options.length === 0) {
+      // For multiple correct mode, validate the correct_options array
+      const validCorrectOptions = formData.correct_options.filter(opt => opt.trim());
+      if (validCorrectOptions.length === 0) {
         newErrors.correct_option = "At least one correct option is required";
+      } else {
+        // Validate weightages for multiple correct mode
+        const totalWeightage = validCorrectOptions.reduce((sum, option) => {
+          const weight = formData.weightages[option] || 0;
+          return sum + weight;
+        }, 0);
+        
+        const roundedTotalWeight = Math.round(totalWeightage * 100) / 100;
+        const roundedTotalMarks = Math.round(formData.points_per_blank * 100) / 100;
+        
+        if (Math.abs(roundedTotalWeight - roundedTotalMarks) > 0.01) {
+          newErrors.weightages = `Total weightage of correct options (${roundedTotalWeight}) must equal total marks (${roundedTotalMarks})`;
+        }
       }
     } else {
       if (!formData.correct_option) {
@@ -224,30 +260,20 @@ export default function QuestionEditorScreen() {
       newErrors.page_number = "Page number must be a positive number";
     }
 
-    // Only validate option matching for question types that use multiple choice options
-    if (hasOptions && (formData.question_type === "omr" || formData.question_type === "traditional" || formData.question_type === "mixed")) {
+    // Only validate option matching for single correct mode with traditional options
+    if (hasOptions && !isMultipleCorrect && (formData.question_type === "omr" || formData.question_type === "traditional" || formData.question_type === "mixed")) {
       const optionKeys = Object.keys(formData.options);
       if (optionKeys.length === 0) {
         newErrors.options =
           "At least one option is required when options are enabled";
       } else {
-        // Validate correct answers match available options
-        if (isMultipleCorrect) {
-          const invalidOptions = formData.correct_options.filter(
-            option => !optionKeys.includes(option.toUpperCase())
-          );
-          if (invalidOptions.length > 0) {
-            newErrors.correct_option =
-              `Invalid correct options: ${invalidOptions.join(', ')}. Must match available options: ${optionKeys.join(', ')}.`;
-          }
-        } else {
-          const correctOptionExists = optionKeys.includes(
-            formData.correct_option.toUpperCase()
-          );
-          if (!correctOptionExists && formData.correct_option) {
-            newErrors.correct_option =
-              `Correct option must match one of the provided options: ${optionKeys.join(', ')}`;
-          }
+        // Validate correct answer matches available options for single mode
+        const correctOptionExists = optionKeys.includes(
+          formData.correct_option.toUpperCase()
+        );
+        if (!correctOptionExists && formData.correct_option) {
+          newErrors.correct_option =
+            `Correct option must match one of the provided options: ${optionKeys.join(', ')}`;
         }
       }
     }
@@ -270,17 +296,27 @@ export default function QuestionEditorScreen() {
         question_text: formData.question_text,
         page_number: Number(formData.page_number),
         question_type: formData.question_type,
+        points_per_blank: Number(formData.points_per_blank),
+        weightages: formData.weightages,
         options:
-          hasOptions && Object.keys(formData.options).length > 0
+          hasOptions && !isMultipleCorrect && Object.keys(formData.options).length > 0
             ? formData.options
             : null,
       };
 
       // Add correct answer(s) based on mode
       if (isMultipleCorrect) {
-        questionPayload.correct_options = formData.correct_options;
+        // For multiple correct mode, only store the correct options
+        const validCorrectOptions = formData.correct_options.filter(opt => opt.trim());
+        questionPayload.correct_options = validCorrectOptions;
+        questionPayload.correct_option = null; // Explicitly set to null for multiple correct mode
+        
+        // Don't include options object for multiple correct mode
+        // The correct_options array contains the actual answers
+        questionPayload.options = null; // Explicitly set to null
       } else {
         questionPayload.correct_option = formData.correct_option;
+        questionPayload.correct_options = formData.correct_option ? [formData.correct_option] : []; // Always provide as array
       }
 
       if (mode === "add") {
@@ -325,6 +361,31 @@ export default function QuestionEditorScreen() {
     if (errors.options) {
       setErrors((prev) => ({ ...prev, options: "" }));
     }
+  };
+
+  const updateWeightage = (key: string, weight: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      weightages: {
+        ...prev.weightages,
+        [key]: weight,
+      },
+    }));
+    // Clear weightages error
+    if (errors.weightages) {
+      setErrors((prev) => ({ ...prev, weightages: "" }));
+    }
+  };
+
+  const calculateTotalWeightage = () => {
+    if (isMultipleCorrect) {
+      const total = formData.correct_options.reduce((sum, option) => {
+        const weight = formData.weightages[option] || 0;
+        return sum + weight;
+      }, 0);
+      return Math.round(total * 100) / 100;
+    }
+    return 0;
   };
 
   const removeOption = (key: string) => {
@@ -389,10 +450,13 @@ export default function QuestionEditorScreen() {
     if (enabled) {
       // Converting from single to multiple - add the single option to the array
       const singleOption = formData.correct_option;
+      const initialWeightages = singleOption ? { [singleOption]: formData.points_per_blank } : {};
+      
       setFormData(prev => ({
         ...prev,
-        correct_options: singleOption ? [singleOption] : [],
-        correct_option: ""
+        correct_options: singleOption && singleOption.trim() ? [singleOption] : [], // Don't start with empty option
+        correct_option: "",
+        weightages: initialWeightages
       }));
     } else {
       // Converting from multiple to single - take the first option
@@ -400,12 +464,13 @@ export default function QuestionEditorScreen() {
       setFormData(prev => ({
         ...prev,
         correct_option: firstOption,
-        correct_options: []
+        correct_options: [],
+        weightages: {} // Clear weightages for single mode
       }));
     }
     
     // Clear any existing errors
-    setErrors(prev => ({ ...prev, correct_option: "" }));
+    setErrors(prev => ({ ...prev, correct_option: "", weightages: "" }));
   };
 
   const renderOptionsSection = () => {
@@ -429,9 +494,12 @@ export default function QuestionEditorScreen() {
           >
             Answer Options
           </Text>
-          <Button mode="outlined" onPress={addNewOption} icon="plus" compact>
-            Add Option
-          </Button>
+          {/* Only show Add Option for traditional editing, not for manual tests */}
+          {!isMultipleCorrect && (
+            <Button mode="outlined" onPress={addNewOption} icon="plus" compact>
+              Add Option
+            </Button>
+          )}
         </View>
 
         {/* Multiple Correct Toggle */}
@@ -451,7 +519,7 @@ export default function QuestionEditorScreen() {
           </View>
           <HelperText type="info" visible={true}>
             {isMultipleCorrect 
-              ? "Select multiple options as correct answers (e.g., Q2: A, C)" 
+              ? "Add only the correct answers for this question" 
               : "Select only one correct answer"
             }
           </HelperText>
@@ -463,141 +531,283 @@ export default function QuestionEditorScreen() {
           </HelperText>
         ) : null}
 
-        {Object.entries(formData.options).map(([key, value]) => (
-          <View key={key} style={styles.optionRow}>
-            <View style={styles.optionContainer}>
-              <TextInput
-                label={`Option ${key}`}
-                placeholder={`Enter text for option ${key}`}
-                value={value}
-                onChangeText={(text) => updateOption(key, text)}
-                style={styles.optionInput}
-                mode="outlined"
-                right={
-                  <TextInput.Icon
-                    icon="close"
-                    onPress={() => removeOption(key)}
+        {/* For Multiple Correct: Show only correct options input */}
+        {isMultipleCorrect ? (
+          <View style={styles.correctOptionsOnlySection}>
+            <Text
+              variant="titleSmall"
+              style={[styles.correctOptionsTitle, { color: theme.colors.onSurface }]}
+            >
+              Correct Answers
+            </Text>
+            <HelperText type="info" visible={true}>
+              Enter only the correct answer letters (A, B, C, D). Each correct answer gets its own input field.
+            </HelperText>
+
+            {/* Display current correct options */}
+            {formData.correct_options.length > 0 ? (
+              formData.correct_options.map((correctOption, index) => (
+                <View key={index} style={styles.correctOptionRow}>
+                  <TextInput
+                    label={`Correct Answer ${index + 1}`}
+                    placeholder="Type correct answer (A, B, C, D, etc.)"
+                    value={correctOption}
+                    onChangeText={(text) => {
+                      const updatedCorrectOptions = [...formData.correct_options];
+                      updatedCorrectOptions[index] = text.trim().toUpperCase();
+                      setFormData(prev => ({ ...prev, correct_options: updatedCorrectOptions }));
+                    }}
+                    style={styles.correctOptionInput}
+                    mode="outlined"
+                    autoCapitalize="characters"
+                    maxLength={10}
+                    right={
+                      formData.correct_options.length > 1 && (
+                        <TextInput.Icon
+                          icon="close"
+                          onPress={() => {
+                            const updatedCorrectOptions = formData.correct_options.filter((_, i) => i !== index);
+                            // Also remove the weightage for this option
+                            const updatedWeightages = { ...formData.weightages };
+                            delete updatedWeightages[correctOption];
+                            setFormData(prev => ({ 
+                              ...prev, 
+                              correct_options: updatedCorrectOptions,
+                              weightages: updatedWeightages
+                            }));
+                          }}
+                        />
+                      )
+                    }
                   />
-                }
-              />
-              
-              {/* Correct Answer Selector */}
-              <View style={styles.correctAnswerSelector}>
-                {isMultipleCorrect ? (
-                  <TouchableOpacity
-                    style={[
-                      styles.checkboxContainer,
-                      {
-                        backgroundColor: formData.correct_options.includes(key)
-                          ? theme.colors.primary
-                          : 'transparent',
-                        borderColor: formData.correct_options.includes(key)
-                          ? theme.colors.primary
-                          : theme.colors.outline,
-                      },
-                    ]}
-                    onPress={() => toggleCorrectOption(key)}
-                  >
-                    {formData.correct_options.includes(key) && (
-                      <Ionicons
-                        name="checkmark"
-                        size={16}
-                        color={theme.colors.onPrimary}
-                      />
-                    )}
-                  </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity
-                    style={[
-                      styles.radioContainer,
-                      {
-                        backgroundColor: formData.correct_option === key
-                          ? theme.colors.primary
-                          : 'transparent',
-                        borderColor: formData.correct_option === key
-                          ? theme.colors.primary
-                          : theme.colors.outline,
-                      },
-                    ]}
-                    onPress={() => handleSingleCorrectChange(key)}
-                  >
-                    {formData.correct_option === key && (
-                      <View style={[styles.radioInner, { backgroundColor: theme.colors.onPrimary }]} />
-                    )}
-                  </TouchableOpacity>
-                )}
+                  
+                  {/* Weightage Input for each correct option */}
+                  <View style={styles.weightageContainer}>
+                    <Text
+                      variant="labelMedium"
+                      style={[styles.weightageLabel, { color: theme.colors.onSurface }]}
+                    >
+                      Weightage (Marks):
+                    </Text>
+                    <TextInput
+                      label="Weight"
+                      value={(formData.weightages[correctOption] || 0).toString()}
+                      onChangeText={(text) => {
+                        const weight = text === '' ? 0 : parseFloat(text) || 0;
+                        if (!isNaN(weight) && weight >= 0) {
+                          updateWeightage(correctOption, weight);
+                        }
+                      }}
+                      keyboardType="decimal-pad"
+                      mode="outlined"
+                      style={styles.weightageInput}
+                      placeholder="0"
+                    />
+                  </View>
+                </View>
+              ))
+            ) : (
+              <View style={styles.noCorrectOptionsContainer}>
+                <Text style={[styles.noCorrectOptionsText, { color: theme.colors.onSurfaceVariant }]}>
+                  No correct answers added yet. Click "Add Correct Answer Field" to get started.
+                </Text>
+              </View>
+            )}
+
+            {/* Add Correct Option Button */}
+            <TouchableOpacity
+              style={[styles.addCorrectOptionButton, { borderColor: theme.colors.primary }]}
+              onPress={() => {
+                setFormData(prev => ({
+                  ...prev,
+                  correct_options: [...prev.correct_options, ""]
+                }));
+              }}
+            >
+              <Ionicons name="add-circle-outline" size={20} color={theme.colors.primary} />
+              <Text style={[styles.addCorrectOptionText, { color: theme.colors.primary }]}>
+                Add Correct Answer Field
+              </Text>
+            </TouchableOpacity>
+
+            {/* Auto-Distribute Weightages Button */}
+            {formData.correct_options.filter(opt => opt.trim()).length > 1 && (
+              <TouchableOpacity
+                style={[styles.autoDistributeButton, { borderColor: theme.colors.secondary }]}
+                onPress={() => {
+                  const validOptions = formData.correct_options.filter(opt => opt.trim());
+                  const weightPerOption = formData.points_per_blank / validOptions.length;
+                  const distributedWeightages: QuestionWeightages = {};
+                  
+                  validOptions.forEach(option => {
+                    distributedWeightages[option] = Math.round(weightPerOption * 100) / 100;
+                  });
+                  
+                  setFormData(prev => ({
+                    ...prev,
+                    weightages: distributedWeightages
+                  }));
+                }}
+              >
+                <Ionicons name="analytics-outline" size={18} color={theme.colors.secondary} />
+                <Text style={[styles.autoDistributeText, { color: theme.colors.secondary }]}>
+                  Auto-Distribute Weightages
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Preview of correct options with weightage validation */}
+            {formData.correct_options.filter(opt => opt.trim()).length > 0 && (
+              <View style={styles.correctAnswersPreview}>
                 <Text
-                  variant="bodySmall"
+                  variant="bodyMedium"
+                  style={[styles.previewLabel, { color: theme.colors.onSurface }]}
+                >
+                  Correct Answers:
+                </Text>
+                <View style={styles.correctAnswersContainer}>
+                  {formData.correct_options
+                    .filter(opt => opt.trim())
+                    .map((option, index) => (
+                      <View key={index} style={[styles.correctAnswerChip, { backgroundColor: theme.colors.primary }]}>
+                        <Text style={[styles.correctAnswerChipText, { color: theme.colors.onPrimary }]}>
+                          {option} ({formData.weightages[option] || 0})
+                        </Text>
+                      </View>
+                    ))
+                  }
+                </View>
+                
+                {/* Weightage Validation Summary */}
+                <View style={[styles.weightValidationContainer, { 
+                  backgroundColor: Math.abs(calculateTotalWeightage() - formData.points_per_blank) <= 0.01 
+                    ? theme.colors.primary + "10" : "#FEF2F2",
+                  borderColor: Math.abs(calculateTotalWeightage() - formData.points_per_blank) <= 0.01 
+                    ? theme.colors.primary : "#F87171"
+                }]}>
+                  <Ionicons 
+                    name={Math.abs(calculateTotalWeightage() - formData.points_per_blank) <= 0.01 
+                      ? "checkmark-circle" : "warning"} 
+                    size={16} 
+                    color={Math.abs(calculateTotalWeightage() - formData.points_per_blank) <= 0.01 
+                      ? theme.colors.primary : "#F87171"} 
+                  />
+                  <Text style={[styles.weightValidationText, { 
+                    color: Math.abs(calculateTotalWeightage() - formData.points_per_blank) <= 0.01 
+                      ? theme.colors.primary : "#F87171" 
+                  }]}>
+                    {Math.abs(calculateTotalWeightage() - formData.points_per_blank) <= 0.01
+                      ? `✓ Perfect! Total weightage matches marks (${formData.points_per_blank})`
+                      : `⚠ Total weightage (${calculateTotalWeightage()}) should equal total marks (${formData.points_per_blank})`
+                    }
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* Display weightage error if any */}
+            {errors.weightages && (
+              <HelperText type="error" visible={true}>
+                {errors.weightages}
+              </HelperText>
+            )}
+          </View>
+        ) : (
+          // For Single Correct: Show traditional option management
+          <>
+            {Object.entries(formData.options).map(([key, value]) => (
+              <View key={key} style={styles.optionRow}>
+                <View style={styles.optionContainer}>
+                  <TextInput
+                    label={`Option ${key}`}
+                    placeholder={`Enter text for option ${key}`}
+                    value={value}
+                    onChangeText={(text) => updateOption(key, text)}
+                    style={styles.optionInput}
+                    mode="outlined"
+                    right={
+                      <TextInput.Icon
+                        icon="close"
+                        onPress={() => removeOption(key)}
+                      />
+                    }
+                  />
+                  
+                  {/* Correct Answer Selector for Single Mode */}
+                  <View style={styles.correctAnswerSelector}>
+                    <TouchableOpacity
+                      style={[
+                        styles.radioContainer,
+                        {
+                          backgroundColor: formData.correct_option === key
+                            ? theme.colors.primary
+                            : 'transparent',
+                          borderColor: formData.correct_option === key
+                            ? theme.colors.primary
+                            : theme.colors.outline,
+                        },
+                      ]}
+                      onPress={() => handleSingleCorrectChange(key)}
+                    >
+                      {formData.correct_option === key && (
+                        <View style={[styles.radioInner, { backgroundColor: theme.colors.onPrimary }]} />
+                      )}
+                    </TouchableOpacity>
+                    <Text
+                      variant="bodySmall"
+                      style={[
+                        styles.correctLabel,
+                        { 
+                          color: formData.correct_option === key
+                            ? theme.colors.primary
+                            : theme.colors.onSurfaceVariant
+                        }
+                      ]}
+                    >
+                      Correct
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ))}
+
+            {Object.keys(formData.options).length === 0 && (
+              <Text
+                variant="bodyMedium"
+                style={[
+                  styles.emptyOptions,
+                  { color: theme.colors.onSurfaceVariant },
+                ]}
+              >
+                No options added yet. Click "Add Option" to get started.
+              </Text>
+            )}
+
+            {/* Selected Correct Answer Preview for Single Mode */}
+            {Object.keys(formData.options).length > 0 && (
+              <View style={styles.correctAnswersPreview}>
+                <Text
+                  variant="bodyMedium"
+                  style={[styles.previewLabel, { color: theme.colors.onSurface }]}
+                >
+                  Selected Correct Answer:
+                </Text>
+                <Text
+                  variant="bodyLarge"
                   style={[
-                    styles.correctLabel,
+                    styles.singleCorrectAnswer,
                     { 
-                      color: (isMultipleCorrect && formData.correct_options.includes(key)) ||
-                             (!isMultipleCorrect && formData.correct_option === key)
-                        ? theme.colors.primary
-                        : theme.colors.onSurfaceVariant
+                      color: formData.correct_option 
+                        ? theme.colors.primary 
+                        : theme.colors.onSurfaceVariant 
                     }
                   ]}
                 >
-                  {isMultipleCorrect ? 'Correct' : 'Correct'}
+                  {formData.correct_option || 'None selected'}
                 </Text>
               </View>
-            </View>
-          </View>
-        ))}
-
-        {Object.keys(formData.options).length === 0 && (
-          <Text
-            variant="bodyMedium"
-            style={[
-              styles.emptyOptions,
-              { color: theme.colors.onSurfaceVariant },
-            ]}
-          >
-            No options added yet. Click "Add Option" to get started.
-          </Text>
-        )}
-
-        {/* Selected Correct Answers Preview */}
-        {Object.keys(formData.options).length > 0 && (
-          <View style={styles.correctAnswersPreview}>
-            <Text
-              variant="bodyMedium"
-              style={[styles.previewLabel, { color: theme.colors.onSurface }]}
-            >
-              Selected Correct Answer{isMultipleCorrect ? 's' : ''}:
-            </Text>
-            {isMultipleCorrect ? (
-              <View style={styles.correctAnswersContainer}>
-                {formData.correct_options.length > 0 ? (
-                  formData.correct_options.map(option => (
-                    <View key={option} style={[styles.correctAnswerChip, { backgroundColor: theme.colors.primary }]}>
-                      <Text style={[styles.correctAnswerChipText, { color: theme.colors.onPrimary }]}>
-                        {option}
-                      </Text>
-                    </View>
-                  ))
-                ) : (
-                  <Text style={[styles.noSelectionText, { color: theme.colors.onSurfaceVariant }]}>
-                    None selected
-                  </Text>
-                )}
-              </View>
-            ) : (
-              <Text
-                variant="bodyLarge"
-                style={[
-                  styles.singleCorrectAnswer,
-                  { 
-                    color: formData.correct_option 
-                      ? theme.colors.primary 
-                      : theme.colors.onSurfaceVariant 
-                  }
-                ]}
-              >
-                {formData.correct_option || 'None selected'}
-              </Text>
             )}
-          </View>
+          </>
         )}
       </View>
     );
@@ -701,6 +911,44 @@ export default function QuestionEditorScreen() {
                 />
               </View>
 
+              <View style={styles.formRow}>
+                <TextInput
+                  label="Total Marks *"
+                  value={formData.points_per_blank.toString()}
+                  onChangeText={(text) => {
+                    const marks = text === '' ? 0 : parseFloat(text) || 0;
+                    if (!isNaN(marks) && marks >= 0) {
+                      setFormData(prev => {
+                        // Auto-distribute weightages if in multiple correct mode
+                        let updatedWeightages = { ...prev.weightages };
+                        if (isMultipleCorrect && prev.correct_options.filter(opt => opt.trim()).length > 0) {
+                          const validOptions = prev.correct_options.filter(opt => opt.trim());
+                          const weightPerOption = marks / validOptions.length;
+                          validOptions.forEach(option => {
+                            updatedWeightages[option] = Math.round(weightPerOption * 100) / 100;
+                          });
+                        }
+                        
+                        return { 
+                          ...prev, 
+                          points_per_blank: marks,
+                          weightages: updatedWeightages
+                        };
+                      });
+                    }
+                    // Clear error
+                    if (errors.points_per_blank) {
+                      setErrors((prev) => ({ ...prev, points_per_blank: "" }));
+                    }
+                  }}
+                  keyboardType="decimal-pad"
+                  mode="outlined"
+                  style={styles.input}
+                  error={!!errors.points_per_blank}
+                  placeholder="Enter total marks for this question"
+                />
+              </View>
+
               {errors.question_number ? (
                 <HelperText type="error" visible={true}>
                   {errors.question_number}
@@ -712,6 +960,16 @@ export default function QuestionEditorScreen() {
                   {errors.page_number}
                 </HelperText>
               ) : null}
+
+              {errors.points_per_blank ? (
+                <HelperText type="error" visible={true}>
+                  {errors.points_per_blank}
+                </HelperText>
+              ) : (
+                <HelperText type="info" visible={true}>
+                  Total marks for this question. {isMultipleCorrect ? "Will auto-distribute to correct options." : ""}
+                </HelperText>
+              )}
 
               {/* Question Type Indicator */}
               <View style={styles.questionTypeIndicator}>
@@ -838,19 +1096,19 @@ export default function QuestionEditorScreen() {
               }
               style={styles.input}
               error={!!errors.correct_option}
-              disabled={hasOptions && Object.keys(formData.options).length > 0} // Disable text input when options are available
+              disabled={hasOptions && !isMultipleCorrect && Object.keys(formData.options).length > 0} // Disable text input when options are available for single mode
             />
 
             <HelperText type={errors.correct_option ? "error" : "info"} visible={true}>
               {errors.correct_option || 
                 (formData.question_type === "fill_blanks"
                   ? "For fill-in-the-blanks, enter the expected answer text"
-                  : hasOptions && Object.keys(formData.options).length > 0
-                    ? (isMultipleCorrect 
-                        ? "Select multiple correct options using the checkboxes below"
-                        : "Select the correct option using the radio buttons below")
-                    : isMultipleCorrect
-                      ? "Enter multiple correct answers separated by commas (e.g., A, C, E)"
+                  : isMultipleCorrect
+                    ? (hasOptions 
+                        ? "Add correct answers using the section below, or enter comma-separated values here"
+                        : "Enter multiple correct answers separated by commas (e.g., A, C, E)")
+                    : hasOptions && Object.keys(formData.options).length > 0
+                      ? "Select the correct option using the radio buttons below"
                       : "Enter the correct answer")
               }
             </HelperText>
@@ -1250,5 +1508,94 @@ const styles = StyleSheet.create({
   singleCorrectAnswer: {
     fontSize: 18,
     fontWeight: "700",
+  },
+  // New styles for correct options only section
+  correctOptionsOnlySection: {
+    marginTop: 8,
+  },
+  correctOptionsTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 8,
+  },
+  correctOptionRow: {
+    marginBottom: 12,
+  },
+  correctOptionInput: {
+    marginBottom: 8,
+  },
+  addCorrectOptionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    borderWidth: 2,
+    borderStyle: "dashed",
+    borderRadius: 8,
+    marginTop: 8,
+    marginBottom: 16,
+    gap: 8,
+  },
+  addCorrectOptionText: {
+    fontWeight: "500",
+    fontSize: 14,
+  },
+  // Weightage styles
+  weightageContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginTop: 8,
+  },
+  weightageLabel: {
+    fontWeight: "500",
+    fontSize: 14,
+  },
+  weightageInput: {
+    width: 80,
+    height: 40,
+  },
+  // Weightage validation styles
+  weightValidationContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 8,
+    marginTop: 12,
+  },
+  weightValidationText: {
+    fontSize: 14,
+    fontWeight: "500",
+    flex: 1,
+  },
+  // Auto-distribute button styles
+  autoDistributeButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderRadius: 8,
+    marginTop: 8,
+    marginBottom: 8,
+    gap: 6,
+  },
+  autoDistributeText: {
+    fontWeight: "500",
+    fontSize: 13,
+  },
+  noCorrectOptionsContainer: {
+    padding: 20,
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.02)',
+    borderRadius: 8,
+    marginVertical: 8,
+  },
+  noCorrectOptionsText: {
+    fontSize: 14,
+    fontStyle: 'italic',
+    textAlign: 'center',
   },
 });

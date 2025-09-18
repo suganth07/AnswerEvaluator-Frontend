@@ -69,16 +69,16 @@ export default function TestsScreen() {
     });
   };
 
-  const viewPaperDetails = (paper: Paper) => {
-    router.push({
-      pathname: "/result",
-      params: {
-        paperId: paper.id,
-        paperName: paper.name,
-        isAdmin: "true",
-      },
-    });
-  };
+  // const viewPaperDetails = (paper: Paper) => {
+  //   router.push({
+  //     pathname: "/result",
+  //     params: {
+  //       paperId: paper.id,
+  //       paperName: paper.name,
+  //       isAdmin: "true",
+  //     },
+  //   });
+  // };
 
   const viewQuestions = (paper: Paper) => {
     router.push({
@@ -186,7 +186,7 @@ export default function TestsScreen() {
     return (
       <TouchableOpacity
         style={[styles.testCard, { backgroundColor: theme.colors.surface }]}
-        onPress={() => viewPaperDetails(item)}
+        // onPress={() => viewPaperDetails(item)}
         activeOpacity={0.7}
       >
         <View style={styles.cardHeader}>

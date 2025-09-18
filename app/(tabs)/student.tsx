@@ -33,6 +33,7 @@ interface Paper {
 
 export default function StudentSubmissionScreen() {
   const [studentName, setStudentName] = useState("");
+  const [rollNumber, setRollNumber] = useState("");
   const [papers, setPapers] = useState<Paper[]>([]);
   const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null);
   const [selectedImages, setSelectedImages] = useState<any[]>([]);
@@ -205,6 +206,11 @@ export default function StudentSubmissionScreen() {
       return;
     }
 
+    if (!rollNumber.trim()) {
+      Alert.alert("Error", "Please enter your roll number");
+      return;
+    }
+
     if (!selectedPaper) {
       Alert.alert("Error", "Please select a paper");
       return;
@@ -230,6 +236,7 @@ export default function StudentSubmissionScreen() {
     try {
       const formData = new FormData();
       formData.append("studentName", studentName.trim());
+      formData.append("rollNo", rollNumber.trim());
       formData.append("paperId", selectedPaper.id.toString());
 
       if (isMultiPage) {
@@ -272,6 +279,7 @@ export default function StudentSubmissionScreen() {
             text: "Submit Another",
             onPress: () => {
               setStudentName("");
+              setRollNumber("");
               setSelectedPaper(null);
               setSelectedImages([]);
               setCurrentStep(1);
@@ -306,7 +314,7 @@ export default function StudentSubmissionScreen() {
   };
 
   const getStepStatus = (step: number) => {
-    if (step === 1) return studentName.trim() ? "completed" : "current";
+    if (step === 1) return studentName.trim() && rollNumber.trim() ? "completed" : "current";
     if (step === 2) {
       return selectedPaper
         ? "completed"
@@ -330,6 +338,7 @@ export default function StudentSubmissionScreen() {
   const canSubmit = () => {
     return (
       studentName.trim() &&
+      rollNumber.trim() &&
       selectedPaper &&
       selectedImages.length > 0 &&
       !submitting
@@ -490,7 +499,7 @@ export default function StudentSubmissionScreen() {
             <Text
               style={[styles.stepCardTitle, { color: theme.colors.onSurface }]}
             >
-              Enter Your Name
+              Enter Your Details
             </Text>
           </View>
           <TextInput
@@ -498,7 +507,7 @@ export default function StudentSubmissionScreen() {
             value={studentName}
             onChangeText={(text) => {
               setStudentName(text);
-              if (text.trim() && currentStep < 2) {
+              if (text.trim() && rollNumber.trim() && currentStep < 2) {
                 setCurrentStep(2);
               }
               // Don't reset currentStep when name is removed - just disable submit button
@@ -506,6 +515,22 @@ export default function StudentSubmissionScreen() {
             style={styles.textInput}
             mode="outlined"
             placeholder="e.g., John Smith"
+            disabled={submitting}
+            theme={{ colors: { primary: "#6366F1" } }}
+          />
+          <TextInput
+            label="Roll Number"
+            value={rollNumber}
+            onChangeText={(text) => {
+              setRollNumber(text);
+              if (studentName.trim() && text.trim() && currentStep < 2) {
+                setCurrentStep(2);
+              }
+              // Don't reset currentStep when roll number is removed - just disable submit button
+            }}
+            style={styles.textInput}
+            mode="outlined"
+            placeholder="e.g., CSE001, 2023001"
             disabled={submitting}
             theme={{ colors: { primary: "#6366F1" } }}
           />
@@ -810,6 +835,24 @@ export default function StudentSubmissionScreen() {
                   ]}
                 >
                   {studentName}
+                </Text>
+              </View>
+              <View style={styles.reviewItem}>
+                <Text
+                  style={[
+                    styles.reviewLabel,
+                    { color: theme.colors.onSurfaceVariant },
+                  ]}
+                >
+                  Roll Number
+                </Text>
+                <Text
+                  style={[
+                    styles.reviewValue,
+                    { color: theme.colors.onSurface },
+                  ]}
+                >
+                  {rollNumber}
                 </Text>
               </View>
               <View style={styles.reviewItem}>

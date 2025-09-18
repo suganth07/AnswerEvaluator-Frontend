@@ -40,6 +40,7 @@ interface ImageInfo {
 export default function StudentSubmissionScreen() {
   const { theme, isDarkMode } = useTheme();
   const [studentName, setStudentName] = useState('');
+  const [rollNo, setRollNo] = useState('');
   const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null);
   const [selectedImages, setSelectedImages] = useState<ImageInfo[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -200,6 +201,11 @@ export default function StudentSubmissionScreen() {
       return;
     }
 
+    if (!rollNo.trim()) {
+      Alert.alert('Error', 'Please enter your roll number');
+      return;
+    }
+
     if (!selectedPaper) {
       Alert.alert('Error', 'Please select a paper');
       return;
@@ -224,6 +230,7 @@ export default function StudentSubmissionScreen() {
     try {
       const formData = new FormData();
       formData.append('studentName', studentName.trim());
+      formData.append('rollNo', rollNo.trim());
       formData.append('paperId', selectedPaper.id.toString());
 
       if (isMultiPage) {
@@ -259,12 +266,13 @@ export default function StudentSubmissionScreen() {
       if (response.ok) {
         Alert.alert(
           'Submission Complete!',
-          `Your answer sheet has been submitted successfully!\n\nStudent: ${result.studentName}\nPaper: ${result.paperName}`,
+          `Your answer sheet has been submitted successfully and is pending evaluation!\n\nStudent: ${result.studentName}\nRoll Number: ${rollNo}\nPaper: ${result.paperName}\n\nStatus: Pending Evaluation\n\nYour submission will be evaluated by the admin. The system will verify your roll number matches the question paper before processing.`,
           [
             {
               text: 'Submit Another',
               onPress: () => {
                 setStudentName('');
+                setRollNo('');
                 setSelectedPaper(null);
                 setSelectedImages([]);
                 setCurrentStep(1);
@@ -299,7 +307,7 @@ export default function StudentSubmissionScreen() {
   };
 
   const getStepStatus = (step: number) => {
-    if (step === 1) return studentName.trim() ? 'completed' : 'current';
+    if (step === 1) return studentName.trim() && rollNo.trim() ? 'completed' : 'current';
     if (step === 2) {
       return selectedPaper
         ? 'completed'
@@ -323,6 +331,7 @@ export default function StudentSubmissionScreen() {
   const canSubmit = () => {
     return (
       studentName.trim() &&
+      rollNo.trim() &&
       selectedPaper &&
       selectedImages.length > 0 &&
       !submitting
@@ -444,7 +453,7 @@ export default function StudentSubmissionScreen() {
         >
           <StepIndicator
             step={1}
-            title="Enter Name"
+            title="Enter Details"
             status={getStepStatus(1)}
           />
           <StepIndicator
@@ -473,7 +482,7 @@ export default function StudentSubmissionScreen() {
           />
         }
       >
-        {/* Step 1: Student Name */}
+        {/* Step 1: Student Details */}
         <View
           style={[styles.stepCard, { backgroundColor: theme.colors.surface }]}
         >
@@ -492,15 +501,16 @@ export default function StudentSubmissionScreen() {
             <Text
               style={[styles.stepCardTitle, { color: theme.colors.onSurface }]}
             >
-              Enter Your Name
+              Enter Your Details
             </Text>
           </View>
+          
           <TextInput
             label="Student Name"
             value={studentName}
             onChangeText={(text) => {
               setStudentName(text);
-              if (text.trim() && currentStep < 2) {
+              if (text.trim() && rollNo.trim() && currentStep < 2) {
                 setCurrentStep(2);
               }
             }}
@@ -510,6 +520,29 @@ export default function StudentSubmissionScreen() {
             disabled={submitting}
             theme={{ colors: { primary: '#6366F1' } }}
           />
+          
+          <TextInput
+            label="Roll Number"
+            value={rollNo}
+            onChangeText={(text) => {
+              setRollNo(text);
+              if (text.trim() && studentName.trim() && currentStep < 2) {
+                setCurrentStep(2);
+              }
+            }}
+            style={styles.textInput}
+            mode="outlined"
+            placeholder="e.g., 2021001"
+            disabled={submitting}
+            theme={{ colors: { primary: '#6366F1' } }}
+          />
+          
+          <View style={styles.infoNote}>
+            <Ionicons name="information-circle" size={16} color="#6366F1" />
+            <Text style={[styles.infoText, { color: theme.colors.onSurfaceVariant }]}>
+              Your roll number will be verified against the question paper during evaluation
+            </Text>
+          </View>
         </View>
 
         {/* Step 2: Paper Selection */}
@@ -811,6 +844,24 @@ export default function StudentSubmissionScreen() {
                   ]}
                 >
                   {studentName}
+                </Text>
+              </View>
+              <View style={styles.reviewItem}>
+                <Text
+                  style={[
+                    styles.reviewLabel,
+                    { color: theme.colors.onSurfaceVariant },
+                  ]}
+                >
+                  Roll Number
+                </Text>
+                <Text
+                  style={[
+                    styles.reviewValue,
+                    { color: theme.colors.onSurface },
+                  ]}
+                >
+                  {rollNo}
                 </Text>
               </View>
               <View style={styles.reviewItem}>
@@ -1196,5 +1247,19 @@ const styles = StyleSheet.create({
   },
   bottomSpacing: {
     height: 40,
+  },
+  infoNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  infoText: {
+    fontSize: 12,
+    marginLeft: 8,
+    flex: 1,
+    lineHeight: 16,
   },
 });

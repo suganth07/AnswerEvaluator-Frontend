@@ -151,6 +151,8 @@ export const questionService = {
     page_number?: number;
     question_type?: string;
     options?: any;
+    weightages?: any;
+    points_per_blank?: number;
   }) => {
     const response = await api.post("/api/questions", questionData);
     return response.data;
@@ -167,6 +169,8 @@ export const questionService = {
       page_number?: number;
       question_type?: string;
       options?: any;
+      weightages?: any;
+      points_per_blank?: number;
     }
   ) => {
     const response = await api.put(

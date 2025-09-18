@@ -183,10 +183,18 @@ export default function ManualQuestionEditorScreen() {
   const saveAndNext = () => {
     if (!validateQuestion()) return;
 
+    console.log(`💾 Saving question ${currentQuestionNumber}:`, JSON.stringify(question, null, 2));
+
     // Update allQuestions array
     const updatedQuestions = [...allQuestions];
     updatedQuestions[currentQuestionNumber - 1] = question;
     setAllQuestions(updatedQuestions);
+
+    console.log(`📋 Updated questions array:`, updatedQuestions.map(q => ({
+      questionNumber: q.questionNumber,
+      optionsCount: q.options.length,
+      correctOptions: q.options.filter(opt => opt.isCorrect).map(opt => ({ id: opt.id, text: opt.text }))
+    })));
 
     if (currentQuestionNumber < totalQuestions) {
       // Go to next question
@@ -222,6 +230,12 @@ export default function ManualQuestionEditorScreen() {
       };
 
       console.log('📤 Test data:', JSON.stringify(testData, null, 2));
+      
+      // Additional debugging - log each question's options
+      testData.questions.forEach((q, index) => {
+        console.log(`📝 Question ${index + 1} options:`, q.options);
+        console.log(`   Correct options:`, q.options.filter(opt => opt.isCorrect));
+      });
       
       const result = await manualTestService.create(testData);
       console.log('✅ Test created successfully:', result);
@@ -352,8 +366,17 @@ export default function ManualQuestionEditorScreen() {
             ]}
             value={option.weight.toString()}
             onChangeText={(text) => {
-              const weight = parseFloat(text) || 0;
-              updateOption(option.id, "weight", weight);
+              // Allow empty input for better UX
+              if (text === '') {
+                updateOption(option.id, "weight", 0);
+                return;
+              }
+              
+              // Allow decimal input including starting with dot
+              const weight = parseFloat(text);
+              if (!isNaN(weight) && weight >= 0) {
+                updateOption(option.id, "weight", weight);
+              }
             }}
             keyboardType="numeric"
             placeholder="1"
@@ -476,10 +499,19 @@ export default function ManualQuestionEditorScreen() {
                         borderColor: theme.colors.outline,
                       },
                     ]}
-                    value={question.totalMarks === 0 ? '' : question.totalMarks.toString()}
+                    value={question.totalMarks.toString()}
                     onChangeText={(text) => {
-                      const marks = text === '' ? 0 : parseFloat(text) || 0;
-                      setQuestion(prev => ({ ...prev, totalMarks: marks }));
+                      // Allow empty input for better UX
+                      if (text === '') {
+                        setQuestion(prev => ({ ...prev, totalMarks: 0 }));
+                        return;
+                      }
+                      
+                      // Allow decimal input
+                      const marks = parseFloat(text);
+                      if (!isNaN(marks) && marks >= 0) {
+                        setQuestion(prev => ({ ...prev, totalMarks: marks }));
+                      }
                     }}
                     keyboardType="numeric"
                     placeholder="Enter marks for this question"
@@ -560,7 +592,7 @@ export default function ManualQuestionEditorScreen() {
                     {/* Option Text Input */}
                     <View style={styles.correctOptionInputGroup}>
                       <Text style={[styles.correctOptionInputLabel, { color: theme.colors.onSurface }]}>
-                        Correct Answer Text:
+                        Correct Answer (A, B, C, D, etc.):
                       </Text>
                       <TextInput
                         style={[
@@ -573,8 +605,26 @@ export default function ManualQuestionEditorScreen() {
                           },
                         ]}
                         value={option.text}
-                        onChangeText={(text) => updateOption(option.id, "text", text)}
-                        placeholder="Enter the correct answer text"
+                        onChangeText={(text) => {
+                          // Clean the input text
+                          const cleanText = text.trim().toUpperCase();
+                          
+                          // For single character answers (A, B, C, D), update both the option ID and text
+                          if (cleanText.length === 1 && /^[A-Z]$/.test(cleanText)) {
+                            setQuestion(prev => ({
+                              ...prev,
+                              options: prev.options.map(opt => 
+                                opt.id === option.id 
+                                  ? { ...opt, id: cleanText, text: cleanText }
+                                  : opt
+                              )
+                            }));
+                          } else {
+                            // For longer text or empty, just update the text but keep original ID
+                            updateOption(option.id, "text", text);
+                          }
+                        }}
+                        placeholder="Enter A, B, C, D or full answer text"
                         placeholderTextColor={theme.colors.onSurfaceVariant}
                         multiline
                       />
@@ -595,18 +645,24 @@ export default function ManualQuestionEditorScreen() {
                             borderWidth: 2,
                           },
                         ]}
-                        value={option.weight === 0 ? '' : option.weight.toString()}
+                        value={option.weight.toString()}
                         onChangeText={(text) => {
-                          // Allow empty input
+                          // Allow empty input for better UX
                           if (text === '') {
                             updateOption(option.id, "weight", 0);
                             return;
                           }
                           
-                          // Allow decimal input
-                          const weight = parseFloat(text);
-                          if (!isNaN(weight)) {
-                            updateOption(option.id, "weight", weight);
+                          // Allow decimal input including starting with dot
+                          // Also allow intermediate states like "0." while typing
+                          if (text === '.' || text.match(/^\d*\.?\d*$/)) {
+                            const weight = parseFloat(text);
+                            if (!isNaN(weight) && weight >= 0) {
+                              updateOption(option.id, "weight", weight);
+                            } else if (text === '.' || text.endsWith('.')) {
+                              // Allow typing decimal point for better UX
+                              updateOption(option.id, "weight", parseFloat(text) || 0);
+                            }
                           }
                         }}
                         keyboardType="decimal-pad"
