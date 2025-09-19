@@ -5,27 +5,30 @@ import {
   ScrollView,
   Alert,
   RefreshControl,
-  SafeAreaView,
   StatusBar,
+  TouchableOpacity,
+  Dimensions,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import {
+  Text,
   Card,
-  Title,
-  Paragraph,
+  IconButton,
+  Chip,
+  Badge,
   Button,
   FAB,
-  ActivityIndicator,
-  Chip,
-  Appbar,
   Surface,
-  Text,
-  List,
-  IconButton,
-  Badge,
+  Appbar,
+  ActivityIndicator,
 } from "react-native-paper";
 import { useTheme } from "../context/ThemeContext";
 import { questionService } from "../services/api";
 import { router, useLocalSearchParams } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+
+const { width } = Dimensions.get("window");
 
 interface Question {
   id: number;
@@ -142,103 +145,217 @@ export default function QuestionsScreen() {
       case "omr":
         return {
           label: "OMR",
-          color: theme.colors.primary,
-          icon: "circle-outline",
+          color: "#6366F1",
+          backgroundColor: "rgba(99, 102, 241, 0.1)",
+          icon: "radio-button-on",
         };
       case "traditional":
         return {
           label: "Traditional",
-          color: theme.colors.secondary,
-          icon: "text-box-outline",
+          color: "#8B5CF6",
+          backgroundColor: "rgba(139, 92, 246, 0.1)",
+          icon: "text-box",
         };
       case "mixed":
         return {
           label: "Mixed",
-          color: theme.colors.tertiary,
-          icon: "format-list-bulleted",
+          color: "#10B981",
+          backgroundColor: "rgba(16, 185, 129, 0.1)",
+          icon: "layers",
         };
       case "fill_blanks":
         return {
           label: "Fill Blanks",
-          color: "#8B5CF6",
-          icon: "pencil-outline",
+          color: "#F59E0B",
+          backgroundColor: "rgba(245, 158, 11, 0.1)",
+          icon: "pencil",
         };
       default:
         return {
           label: "Traditional",
-          color: theme.colors.secondary,
-          icon: "text-box-outline",
+          color: "#8B5CF6",
+          backgroundColor: "rgba(139, 92, 246, 0.1)",
+          icon: "text-box",
         };
     }
   };
+
+  const formatDate = (dateString: string) => {
+    const now = new Date();
+    const date = new Date(dateString);
+    const diffInHours = Math.floor(
+      (now.getTime() - date.getTime()) / (1000 * 60 * 60)
+    );
+
+    if (diffInHours < 1) return "Just now";
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+    if (diffInHours < 48) return "Yesterday";
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
+
+  // Quick Action Card Component
+  const QuickActionCard = () => (
+    <TouchableOpacity onPress={handleAddQuestion}>
+      <LinearGradient
+        colors={isDarkMode ? ["#6366F1", "#8B5CF6"] : ["#6366F1", "#8B5CF6"]}
+        style={styles.quickActionCard}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <View style={styles.quickActionContent}>
+          <View style={styles.quickActionTextContainer}>
+            <Text variant="headlineSmall" style={styles.quickActionTitle}>
+              Add New Question
+            </Text>
+            <Text variant="bodyMedium" style={styles.quickActionSubtitle}>
+              Create questions for your test paper quickly and efficiently
+            </Text>
+          </View>
+          <View style={styles.quickActionIconContainer}>
+            <LinearGradient
+              colors={["rgba(255,255,255,0.2)", "rgba(255,255,255,0.1)"]}
+              style={styles.quickActionIcon}
+            >
+              <Ionicons name="add" size={24} color="white" />
+            </LinearGradient>
+          </View>
+        </View>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={handleAddQuestion}
+        >
+          <Text style={styles.actionButtonText}>Add Question</Text>
+          <Ionicons name="arrow-forward" size={16} color="#6366F1" />
+        </TouchableOpacity>
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+
+  // Stats Card Component
+  const StatsCard = () => (
+    <View style={styles.statsContainer}>
+      <View
+        style={[styles.statCard, { backgroundColor: theme.colors.surface }]}
+      >
+        <Text
+          variant="headlineMedium"
+          style={[styles.statNumber, { color: theme.colors.onSurface }]}
+        >
+          {questionsData?.totalQuestions || 0}
+        </Text>
+        <Text
+          variant="bodySmall"
+          style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}
+        >
+          Total Questions
+        </Text>
+      </View>
+      <View
+        style={[styles.statCard, { backgroundColor: theme.colors.surface }]}
+      >
+        <Text
+          variant="headlineMedium"
+          style={[styles.statNumber, { color: theme.colors.onSurface }]}
+        >
+          {questionsData?.questions?.filter((q) => q.options).length || 0}
+        </Text>
+        <Text
+          variant="bodySmall"
+          style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}
+        >
+          With Options
+        </Text>
+      </View>
+    </View>
+  );
 
   const renderQuestion = (question: Question, index: number) => {
     const typeInfo = getQuestionTypeInfo(question.question_type);
 
     return (
-      <Card
+      <View
         key={question.id}
         style={[styles.questionCard, { backgroundColor: theme.colors.surface }]}
-        elevation={2}
       >
-        <Card.Content>
-          <View style={styles.questionHeader}>
-            <View style={styles.questionNumberContainer}>
-              <Badge
-                size={32}
-                style={{ backgroundColor: theme.colors.primary }}
-              >
+        <View style={styles.questionHeader}>
+          <View style={styles.questionNumberBadge}>
+            <LinearGradient
+              colors={["#6366F1", "#8B5CF6"]}
+              style={styles.numberGradient}
+            >
+              <Text style={styles.questionNumberText}>
                 {question.question_number}
-              </Badge>
-              <View style={styles.questionMetadata}>
-                <Chip
-                  mode="outlined"
-                  icon={typeInfo.icon}
-                  textStyle={[styles.chipText, { color: typeInfo.color }]}
-                  style={[styles.typeChip, { borderColor: typeInfo.color }]}
-                  compact
-                >
+              </Text>
+            </LinearGradient>
+          </View>
+
+          <View style={styles.questionMeta}>
+            <View style={styles.questionMetaTop}>
+              <View
+                style={[
+                  styles.typeChip,
+                  {
+                    backgroundColor: typeInfo.backgroundColor,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name={typeInfo.icon as any}
+                  size={14}
+                  color={typeInfo.color}
+                  style={styles.typeIcon}
+                />
+                <Text style={[styles.typeLabel, { color: typeInfo.color }]}>
                   {typeInfo.label}
-                </Chip>
-                <Text
-                  variant="bodySmall"
-                  style={{ color: theme.colors.onSurfaceVariant }}
-                >
-                  Page {question.page_number}
                 </Text>
               </View>
-            </View>
-
-            <View style={styles.questionActions}>
-              <IconButton
-                icon="pencil"
-                iconColor={theme.colors.primary}
-                size={20}
-                onPress={() => handleEditQuestion(question)}
-                style={styles.actionIcon}
-              />
-              <IconButton
-                icon="delete"
-                iconColor={theme.colors.error}
-                size={20}
-                onPress={() => handleDeleteQuestion(question)}
-                style={styles.actionIcon}
-              />
+              <Text
+                variant="bodySmall"
+                style={[
+                  styles.pageNumber,
+                  { color: theme.colors.onSurfaceVariant },
+                ]}
+              >
+                Page {question.page_number}
+              </Text>
             </View>
           </View>
 
-          {question.question_text && (
-            <View style={styles.questionTextContainer}>
-              <Text
-                variant="bodyMedium"
-                style={[styles.questionText, { color: theme.colors.onSurface }]}
-              >
-                {question.question_text}
-              </Text>
-            </View>
-          )}
+          <View style={styles.questionActions}>
+            <TouchableOpacity
+              style={[
+                styles.actionIcon,
+                { backgroundColor: "rgba(99, 102, 241, 0.1)" },
+              ]}
+              onPress={() => handleEditQuestion(question)}
+            >
+              <Ionicons name="pencil" size={16} color="#6366F1" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.actionIcon,
+                { backgroundColor: "rgba(239, 68, 68, 0.1)" },
+              ]}
+              onPress={() => handleDeleteQuestion(question)}
+            >
+              <Ionicons name="trash" size={16} color="#EF4444" />
+            </TouchableOpacity>
+          </View>
+        </View>
 
-          <View style={styles.answerContainer}>
+        {question.question_text && (
+          <View style={styles.questionTextContainer}>
+            <Text
+              variant="bodyLarge"
+              style={[styles.questionText, { color: theme.colors.onSurface }]}
+            >
+              {question.question_text}
+            </Text>
+          </View>
+        )}
+
+        <View style={styles.answerSection}>
+          <View style={styles.answerHeader}>
             <Text
               variant="bodySmall"
               style={[
@@ -248,18 +365,26 @@ export default function QuestionsScreen() {
             >
               Correct Answer:
             </Text>
+          </View>
+          <View style={styles.answerContainer}>
             {(() => {
               // Handle both single and multiple correct answers
               let correctAnswers: string[] = [];
-              
+
               // For multiple choice questions, prioritize correct_options
-              if (question.question_format === 'multiple_choice') {
-                if (question.correct_options && Array.isArray(question.correct_options) && question.correct_options.length > 0) {
+              if (question.question_format === "multiple_choice") {
+                if (
+                  question.correct_options &&
+                  Array.isArray(question.correct_options) &&
+                  question.correct_options.length > 0
+                ) {
                   correctAnswers = question.correct_options;
                 } else if (question.correct_option) {
                   // Fallback: split comma-separated values or use single value
-                  correctAnswers = question.correct_option.includes(',') 
-                    ? question.correct_option.split(',').map(opt => opt.trim())
+                  correctAnswers = question.correct_option.includes(",")
+                    ? question.correct_option
+                        .split(",")
+                        .map((opt) => opt.trim())
                     : [question.correct_option];
                 }
               } else {
@@ -271,134 +396,171 @@ export default function QuestionsScreen() {
 
               if (correctAnswers.length === 0) {
                 return (
-                  <Chip
-                    mode="flat"
-                    textStyle={[styles.answerText, { color: theme.colors.onError }]}
-                    style={[styles.answerChip, { backgroundColor: theme.colors.errorContainer }]}
-                    compact
+                  <View
+                    style={[
+                      styles.answerChip,
+                      { backgroundColor: "rgba(239, 68, 68, 0.1)" },
+                    ]}
                   >
-                    Not set
-                  </Chip>
+                    <Text style={[styles.answerText, { color: "#EF4444" }]}>
+                      Not set
+                    </Text>
+                  </View>
                 );
               }
-              
-              return correctAnswers.map((answer: string, index: number) => (
-                <Chip
-                  key={index}
-                  mode="flat"
-                  textStyle={[
-                    styles.answerText,
-                    { color: theme.colors.onTertiary },
-                  ]}
-                  style={[
-                    styles.answerChip,
-                    { backgroundColor: theme.colors.tertiary },
-                    { marginRight: correctAnswers.length > 1 ? 4 : 0 }
-                  ]}
-                  compact
-                >
-                  {/* For multiple choice, show option letter; for text answers, show the full text */}
-                  {question.question_format === 'multiple_choice' ? answer.toUpperCase() : answer}
-                </Chip>
-              ));
+
+              return correctAnswers.map(
+                (answer: string, answerIndex: number) => (
+                  <View
+                    key={answerIndex}
+                    style={[
+                      styles.answerChip,
+                      {
+                        backgroundColor: "rgba(16, 185, 129, 0.1)",
+                        marginRight: correctAnswers.length > 1 ? 8 : 0,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.answerText, { color: "#10B981" }]}>
+                      {question.question_format === "multiple_choice"
+                        ? answer.toUpperCase()
+                        : answer}
+                    </Text>
+                  </View>
+                )
+              );
             })()}
           </View>
+        </View>
 
-          {question.options && typeof question.options === "object" && (
-            <View style={styles.optionsContainer}>
-              <Text
-                variant="bodySmall"
-                style={[
-                  styles.optionsLabel,
-                  { color: theme.colors.onSurfaceVariant },
-                ]}
-              >
-                Options:
-              </Text>
-              <View style={styles.optionsList}>
-                {(() => {
-                  // Handle both array and object formats for options
-                  if (Array.isArray(question.options)) {
-                    // Legacy format: ["A", "B", "C", "D"] -> show as A, B, C, D
-                    return question.options.map((option, index) => (
-                      <Chip
-                        key={index}
-                        mode="outlined"
-                        textStyle={[
-                          styles.optionText,
-                          { color: theme.colors.onSurfaceVariant },
+        {question.options && typeof question.options === "object" && (
+          <View style={styles.optionsSection}>
+            <Text
+              variant="bodySmall"
+              style={[
+                styles.optionsLabel,
+                { color: theme.colors.onSurfaceVariant },
+              ]}
+            >
+              Options:
+            </Text>
+            <View style={styles.optionsList}>
+              {(() => {
+                const options = question.options;
+
+                // Handle different option formats
+                if (Array.isArray(options)) {
+                  return options.map((option: string, optionIndex: number) => {
+                    const optionKey = String.fromCharCode(65 + optionIndex); // A, B, C, etc.
+                    return (
+                      <View
+                        key={optionIndex}
+                        style={[
+                          styles.optionChip,
+                          {
+                            backgroundColor: isDarkMode ? "#374151" : "#F3F4F6",
+                          },
                         ]}
-                        style={styles.optionChip}
-                        compact
                       >
-                        {option}
-                      </Chip>
-                    ));
-                  } else {
-                    // New format: {"A": "text", "B": "text"}
-                    return Object.entries(question.options).map(([key, value]) => {
-                      // Check if value is just generic "Option X" text
-                      const isGenericText = value === `Option ${key}`;
-                      
-                      return (
-                        <Chip
-                          key={key}
-                          mode="outlined"
-                          textStyle={[
+                        <Text
+                          style={[
+                            styles.optionKey,
+                            { color: theme.colors.primary },
+                          ]}
+                        >
+                          {optionKey}:
+                        </Text>
+                        <Text
+                          style={[
                             styles.optionText,
                             { color: theme.colors.onSurfaceVariant },
                           ]}
-                          style={styles.optionChip}
-                          compact
+                          numberOfLines={2}
                         >
-                          {isGenericText ? key : `${key}: ${String(value)}`}
-                        </Chip>
-                      );
-                    });
-                  }
-                })()}
-              </View>
+                          {option}
+                        </Text>
+                      </View>
+                    );
+                  });
+                }
+
+                // Handle object format
+                return Object.entries(options)
+                  .filter(
+                    ([key, value]) =>
+                      value && typeof value === "string" && value.trim()
+                  )
+                  .map(([key, value]) => (
+                    <View
+                      key={key}
+                      style={[
+                        styles.optionChip,
+                        { backgroundColor: isDarkMode ? "#374151" : "#F3F4F6" },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.optionKey,
+                          { color: theme.colors.primary },
+                        ]}
+                      >
+                        {key.toUpperCase()}:
+                      </Text>
+                      <Text
+                        style={[
+                          styles.optionText,
+                          { color: theme.colors.onSurfaceVariant },
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {value as string}
+                      </Text>
+                    </View>
+                  ));
+              })()}
             </View>
-          )}
-        </Card.Content>
-      </Card>
+          </View>
+        )}
+      </View>
     );
   };
 
   if (loading) {
     return (
       <SafeAreaView
-        style={[styles.safeArea, { backgroundColor: theme.colors.surface }]}
+        style={[styles.safeArea, { backgroundColor: "#6366F1" }]}
+        edges={["top", "left", "right"]}
       >
-        <StatusBar
-          barStyle={isDarkMode ? "light-content" : "dark-content"}
-          backgroundColor={theme.colors.surface}
-        />
-        <Surface
-          style={[styles.header, { backgroundColor: theme.colors.surface }]}
-          elevation={2}
+        <StatusBar barStyle="light-content" backgroundColor="#6366F1" />
+
+        {/* Header */}
+        <LinearGradient
+          colors={["#6366F1", "#8B5CF6"]}
+          style={styles.headerGradient}
         >
-          <Appbar.Header style={styles.appbarHeader}>
-            <Appbar.BackAction
-              onPress={() => router.back()}
-              iconColor={theme.colors.onSurface}
-            />
-            <Appbar.Content
-              title="Questions"
-              titleStyle={[
-                styles.headerTitle,
-                { color: theme.colors.onSurface },
-              ]}
-            />
-          </Appbar.Header>
-        </Surface>
+          <View style={styles.headerContent}>
+            <View style={styles.headerTop}>
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={() => router.back()}
+              >
+                <Ionicons name="arrow-back" size={24} color="white" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.headerInfo}>
+              <Text style={styles.headerTitle}>Questions</Text>
+              <Text style={styles.headerSubtitle}>Loading questions...</Text>
+            </View>
+          </View>
+        </LinearGradient>
+
         <View
           style={[
             styles.loadingContainer,
             { backgroundColor: theme.colors.background },
           ]}
         >
-          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <ActivityIndicator size="large" color="#6366F1" />
           <Text
             variant="bodyLarge"
             style={[
@@ -415,39 +577,37 @@ export default function QuestionsScreen() {
 
   return (
     <SafeAreaView
-      style={[styles.safeArea, { backgroundColor: theme.colors.surface }]}
+      style={[styles.safeArea, { backgroundColor: "#6366F1" }]}
+      edges={["top", "left", "right"]}
     >
-      <StatusBar
-        barStyle={isDarkMode ? "light-content" : "dark-content"}
-        backgroundColor={theme.colors.surface}
-      />
+      <StatusBar barStyle="light-content" backgroundColor="#6366F1" />
 
-      {/* Enhanced Header */}
-      <Surface
-        style={[styles.header, { backgroundColor: theme.colors.surface }]}
-        elevation={2}
+      {/* Enhanced Header with Gradient */}
+      <LinearGradient
+        colors={["#6366F1", "#8B5CF6"]}
+        style={styles.headerGradient}
       >
-        <Appbar.Header style={styles.appbarHeader}>
-          <Appbar.BackAction
-            onPress={() => router.back()}
-            iconColor={theme.colors.onSurface}
-          />
-          <Appbar.Content
-            title="Questions"
-            subtitle={paperName}
-            titleStyle={[styles.headerTitle, { color: theme.colors.onSurface }]}
-            subtitleStyle={[
-              styles.headerSubtitle,
-              { color: theme.colors.onSurfaceVariant },
-            ]}
-          />
-          <Appbar.Action
-            icon="plus"
-            onPress={handleAddQuestion}
-            iconColor={theme.colors.primary}
-          />
-        </Appbar.Header>
-      </Surface>
+        <View style={styles.headerContent}>
+          <View style={styles.headerTop}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => router.back()}
+            >
+              <Ionicons name="arrow-back" size={24} color="white" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={handleAddQuestion}
+            >
+              <Ionicons name="add" size={24} color="white" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.headerInfo}>
+            <Text style={styles.headerTitle}>Questions</Text>
+            <Text style={styles.headerSubtitle}>{paperName}</Text>
+          </View>
+        </View>
+      </LinearGradient>
 
       <ScrollView
         style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -457,117 +617,106 @@ export default function QuestionsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={[theme.colors.primary]}
-            tintColor={theme.colors.primary}
+            colors={["#6366F1"]}
+            tintColor="#6366F1"
+            progressViewOffset={20}
           />
         }
       >
-        {/* Paper Summary */}
-        <Card
-          style={[
-            styles.summaryCard,
-            { backgroundColor: theme.colors.surface },
-          ]}
-          elevation={3}
-        >
-          <Card.Content>
-            <View style={styles.summaryHeader}>
-              <View>
-                <Text
-                  variant="titleLarge"
-                  style={[styles.paperTitle, { color: theme.colors.onSurface }]}
-                >
-                  {questionsData?.paper.name}
-                </Text>
-                <Text
-                  variant="bodyMedium"
-                  style={[
-                    styles.questionCount,
-                    { color: theme.colors.onSurfaceVariant },
-                  ]}
-                >
-                  {questionsData?.totalQuestions || 0} Questions
-                </Text>
-              </View>
-              <IconButton
-                icon="format-list-bulleted"
-                iconColor={theme.colors.primary}
-                size={32}
-                style={styles.summaryIcon}
-              />
-            </View>
-          </Card.Content>
-        </Card>
+        {/* Quick Action Card */}
+        <View style={styles.section}>
+          <QuickActionCard />
+        </View>
+
+        {/* Stats */}
+        <View style={styles.section}>
+          <StatsCard />
+        </View>
 
         {/* Questions List */}
         {questionsData?.questions && questionsData.questions.length > 0 ? (
-          <View style={styles.questionsContainer}>
-            <Text
-              variant="titleMedium"
-              style={[styles.sectionTitle, { color: theme.colors.onSurface }]}
-            >
-              All Questions
-            </Text>
-            {questionsData.questions.map((question, index) =>
-              renderQuestion(question, index)
-            )}
-          </View>
-        ) : (
-          <Card
-            style={[
-              styles.emptyCard,
-              { backgroundColor: theme.colors.surface },
-            ]}
-            elevation={1}
-          >
-            <Card.Content style={styles.emptyContainer}>
-              <IconButton
-                icon="format-list-bulleted"
-                iconColor={theme.colors.onSurfaceVariant}
-                size={64}
-                style={styles.emptyIcon}
-              />
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
               <Text
                 variant="headlineSmall"
-                style={[
-                  styles.emptyTitle,
-                  { color: theme.colors.onSurfaceVariant },
-                ]}
+                style={[styles.sectionTitle, { color: theme.colors.onSurface }]}
               >
-                No Questions Yet
+                All Questions
               </Text>
-              <Text
-                variant="bodyLarge"
-                style={[
-                  styles.emptyText,
-                  { color: theme.colors.onSurfaceVariant },
-                ]}
-              >
-                Add your first question to get started
-              </Text>
-              <Button
-                mode="contained"
-                onPress={handleAddQuestion}
-                style={styles.emptyButton}
-                icon="plus"
-              >
-                Add Question
-              </Button>
-            </Card.Content>
-          </Card>
+              <TouchableOpacity>
+                <Ionicons
+                  name="funnel-outline"
+                  size={20}
+                  color={theme.colors.onSurfaceVariant}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.questionsContainer}>
+              {questionsData.questions.map((question, index) =>
+                renderQuestion(question, index)
+              )}
+            </View>
+          </View>
+        ) : (
+          <View style={styles.section}>
+            <View
+              style={[
+                styles.emptyCard,
+                { backgroundColor: theme.colors.surface },
+              ]}
+            >
+              <View style={styles.emptyContainer}>
+                <LinearGradient
+                  colors={[
+                    "rgba(99, 102, 241, 0.1)",
+                    "rgba(139, 92, 246, 0.1)",
+                  ]}
+                  style={styles.emptyIconContainer}
+                >
+                  <Ionicons
+                    name="help-circle-outline"
+                    size={64}
+                    color="#6366F1"
+                  />
+                </LinearGradient>
+                <Text
+                  variant="headlineSmall"
+                  style={[styles.emptyTitle, { color: theme.colors.onSurface }]}
+                >
+                  No Questions Yet
+                </Text>
+                <Text
+                  variant="bodyLarge"
+                  style={[
+                    styles.emptyText,
+                    { color: theme.colors.onSurfaceVariant },
+                  ]}
+                >
+                  Create your first question to get started with this test paper
+                </Text>
+                <LinearGradient
+                  colors={["#6366F1", "#8B5CF6"]}
+                  style={styles.emptyButtonGradient}
+                >
+                  <TouchableOpacity
+                    style={styles.emptyButton}
+                    onPress={handleAddQuestion}
+                  >
+                    <Ionicons name="add" size={20} color="white" />
+                    <Text style={styles.emptyButtonText}>
+                      Add First Question
+                    </Text>
+                  </TouchableOpacity>
+                </LinearGradient>
+              </View>
+            </View>
+          </View>
         )}
 
         {/* Bottom Spacing */}
-        <View style={styles.bottomSpacing} />
+        <View style={styles.bottomSpacer} />
       </ScrollView>
-
-      {/* Floating Action Button */}
-      <FAB
-        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
-        icon="plus"
-        label="Add Question"
-        onPress={handleAddQuestion}
-      />
     </SafeAreaView>
   );
 }
@@ -579,164 +728,322 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
+  headerGradient: {
+    paddingTop: 20,
+    paddingBottom: 24,
+    paddingHorizontal: 20,
+  },
+  headerContent: {
+    flex: 1,
+  },
+  headerTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  addButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  headerInfo: {
+    alignItems: "flex-start",
+  },
+  headerTitle: {
+    color: "white",
+    fontSize: 28,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    color: "rgba(255,255,255,0.8)",
+    fontSize: 16,
+  },
+  scrollContent: {
+    paddingBottom: 100,
+  },
+  section: {
+    paddingHorizontal: 20,
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontWeight: "600",
+  },
+  quickActionCard: {
+    borderRadius: 16,
+    padding: 20,
+    marginTop: 8,
+  },
+  quickActionContent: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 20,
+  },
+  quickActionTextContainer: {
+    flex: 1,
+    paddingRight: 16,
+  },
+  quickActionTitle: {
+    color: "white",
+    fontWeight: "700",
+    marginBottom: 8,
+  },
+  quickActionSubtitle: {
+    color: "rgba(255,255,255,0.9)",
+    lineHeight: 20,
+  },
+  quickActionIconContainer: {
+    alignItems: "center",
+  },
+  quickActionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  actionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "white",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+    alignSelf: "flex-start",
+  },
+  actionButtonText: {
+    color: "#6366F1",
+    fontWeight: "600",
+    marginRight: 8,
+  },
+  statsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  statCard: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  statNumber: {
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    textAlign: "center",
+  },
+  questionsContainer: {
+    gap: 16,
+  },
+  questionCard: {
+    borderRadius: 16,
+    padding: 20,
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
       height: 2,
     },
     shadowOpacity: 0.1,
-    shadowRadius: 3.84,
+    shadowRadius: 8,
     elevation: 3,
-  },
-  appbarHeader: {
-    backgroundColor: "transparent",
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    opacity: 0.8,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 100,
-  },
-  summaryCard: {
-    marginBottom: 20,
-    borderRadius: 16,
-    overflow: "hidden",
-  },
-  summaryHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  paperTitle: {
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  questionCount: {
-    opacity: 0.8,
-  },
-  summaryIcon: {
-    margin: 0,
-  },
-  sectionTitle: {
-    fontWeight: "600",
-    marginBottom: 12,
-    paddingHorizontal: 4,
-  },
-  questionsContainer: {
-    gap: 12,
-  },
-  questionCard: {
-    borderRadius: 12,
-    overflow: "hidden",
-    marginBottom: 8,
   },
   questionHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 12,
-  },
-  questionNumberContainer: {
-    flexDirection: "row",
-    alignItems: "center",
+    marginBottom: 16,
     gap: 12,
+  },
+  questionNumberBadge: {
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  numberGradient: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  questionNumberText: {
+    color: "white",
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  questionMeta: {
     flex: 1,
   },
-  questionMetadata: {
-    gap: 4,
-  },
-  questionActions: {
+  questionMetaTop: {
     flexDirection: "row",
-    gap: 4,
-  },
-  actionIcon: {
-    margin: 0,
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   typeChip: {
-    alignSelf: "flex-start",
-  },
-  chipText: {
-    fontSize: 12,
-  },
-  questionTextContainer: {
-    marginBottom: 12,
-    paddingLeft: 8,
-  },
-  questionText: {
-    lineHeight: 20,
-  },
-  answerContainer: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    marginBottom: 12,
-  },
-  answerLabel: {
-    fontWeight: "500",
-  },
-  answerChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
     alignSelf: "flex-start",
   },
-  answerText: {
+  typeIcon: {
+    marginRight: 6,
+  },
+  typeLabel: {
     fontSize: 12,
     fontWeight: "600",
   },
-  optionsContainer: {
+  pageNumber: {
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  questionActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  actionIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  questionTextContainer: {
+    marginBottom: 16,
+    padding: 16,
+    backgroundColor: "rgba(0,0,0,0.02)",
+    borderRadius: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: "#6366F1",
+  },
+  questionText: {
+    lineHeight: 24,
+    fontWeight: "400",
+  },
+  answerSection: {
+    marginBottom: 16,
+  },
+  answerHeader: {
+    marginBottom: 8,
+  },
+  answerLabel: {
+    fontWeight: "500",
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  answerContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  answerChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    alignSelf: "flex-start",
+  },
+  answerText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  optionsSection: {
     gap: 8,
   },
   optionsLabel: {
     fontWeight: "500",
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   optionsList: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
+    gap: 8,
   },
   optionChip: {
-    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 12,
+    gap: 8,
+  },
+  optionKey: {
+    fontSize: 14,
+    fontWeight: "700",
+    minWidth: 24,
   },
   optionText: {
-    fontSize: 11,
+    fontSize: 14,
+    flex: 1,
+    lineHeight: 20,
   },
   emptyCard: {
     borderRadius: 16,
-    overflow: "hidden",
-    marginTop: 40,
+    padding: 40,
+    alignItems: "center",
   },
   emptyContainer: {
     alignItems: "center",
-    paddingVertical: 40,
-    paddingHorizontal: 20,
   },
-  emptyIcon: {
-    margin: 0,
-    marginBottom: 16,
+  emptyIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 24,
   },
   emptyTitle: {
     textAlign: "center",
     marginBottom: 8,
+    fontWeight: "600",
   },
   emptyText: {
     textAlign: "center",
-    marginBottom: 24,
-    opacity: 0.8,
+    marginBottom: 32,
+    lineHeight: 24,
+  },
+  emptyButtonGradient: {
+    borderRadius: 25,
+    overflow: "hidden",
   },
   emptyButton: {
-    marginTop: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    gap: 8,
   },
-  fab: {
-    position: "absolute",
-    margin: 20,
-    right: 0,
-    bottom: 0,
+  emptyButtonText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "600",
   },
   loadingContainer: {
     flex: 1,
@@ -746,7 +1053,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
   },
-  bottomSpacing: {
-    height: 20,
+  bottomSpacer: {
+    height: 100,
   },
 });

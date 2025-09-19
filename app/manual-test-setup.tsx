@@ -20,7 +20,6 @@ export default function ManualTestSetupScreen() {
   const [selectedPreset, setSelectedPreset] = useState<number | null>(null);
   const { theme, isDarkMode } = useTheme();
 
-
   const handleContinue = () => {
     if (!testName.trim()) {
       Alert.alert("Error", "Please enter a test name");
@@ -44,258 +43,302 @@ export default function ManualTestSetupScreen() {
     });
   };
 
-  const PresetCard = ({ preset }: { preset: typeof questionPresets[0] }) => (
-    <TouchableOpacity
-      style={[
-        styles.presetCard,
-        {
-          backgroundColor: theme.colors.surface,
-          borderColor: selectedPreset === preset.count ? theme.colors.primary : "transparent",
-          borderWidth: selectedPreset === preset.count ? 2 : 1,
-        },
-      ]}
-      onPress={() => {
-        setSelectedPreset(preset.count);
-        setNumQuestions("");
-      }}
-      activeOpacity={0.7}
-    >
-      <View
-        style={[
-          styles.presetIcon,
-          {
-            backgroundColor: selectedPreset === preset.count
-              ? theme.colors.primary + "20"
-              : isDarkMode ? "#374151" : "#F3F4F6",
-          },
-        ]}
-      >
-        <Ionicons
-          name={preset.icon as any}
-          size={24}
-          color={selectedPreset === preset.count ? theme.colors.primary : theme.colors.onSurfaceVariant}
-        />
-      </View>
-      <Text
-        variant="titleMedium"
-        style={[
-          styles.presetTitle,
-          {
-            color: selectedPreset === preset.count ? theme.colors.primary : theme.colors.onSurface,
-          },
-        ]}
-      >
-        {preset.count} Questions
-      </Text>
-      <Text
-        variant="bodySmall"
-        style={[
-          styles.presetLabel,
-          { color: theme.colors.onSurfaceVariant },
-        ]}
-      >
-        {preset.label}
-      </Text>
-      {selectedPreset === preset.count && (
-        <View style={styles.selectedIndicator}>
-          <Ionicons name="checkmark-circle" size={20} color={theme.colors.primary} />
-        </View>
-      )}
-    </TouchableOpacity>
-  );
-
   return (
-    <SafeAreaView
-      style={[styles.safeArea, { backgroundColor: theme.colors.background }]}
-      edges={["top", "left", "right"]}
-    >
-      {/* Header */}
+    <View style={styles.safeArea}>
       <LinearGradient
         colors={isDarkMode ? ["#1F2937", "#111827"] : ["#6366F1", "#8B5CF6"]}
-        style={styles.headerGradient}
+        style={styles.fullScreenGradient}
       >
-        <View style={styles.headerContent}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <Ionicons name="arrow-back" size={24} color="white" />
-          </TouchableOpacity>
-          <View style={styles.headerTextContainer}>
-            <Text variant="headlineMedium" style={styles.headerTitle}>
-              Create Manual Test
-            </Text>
-            <Text variant="bodyLarge" style={styles.headerSubtitle}>
-              Set up your test questions manually
-            </Text>
-          </View>
-        </View>
-      </LinearGradient>
-
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Test Name Section */}
-        <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-          <View style={styles.cardContent}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="create-outline" size={24} color={theme.colors.primary} />
-              <Text variant="titleLarge" style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-                Test Details
-              </Text>
-            </View>
-            <Text variant="bodyMedium" style={[styles.sectionDescription, { color: theme.colors.onSurfaceVariant }]}>
-              Give your test a descriptive name that students will recognize
-            </Text>
-            
-            <View style={styles.inputContainer}>
-              <Text variant="labelLarge" style={[styles.inputLabel, { color: theme.colors.onSurface }]}>
-                Test Name *
-              </Text>
-              <TextInput
-                style={[
-                  styles.textInput,
-                  {
-                    backgroundColor: isDarkMode ? "#374151" : "#F9FAFB",
-                    color: theme.colors.onSurface,
-                    borderColor: theme.colors.outline,
-                  },
-                ]}
-                value={testName}
-                onChangeText={setTestName}
-                placeholder="e.g., Mathematics Quiz - Chapter 5"
-                placeholderTextColor={theme.colors.onSurfaceVariant}
-                maxLength={100}
-              />
-            </View>
-          </View>
-        </Card>
-
-        {/* Number of Questions Section */}
-        <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-          <View style={styles.cardContent}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="list-outline" size={24} color={theme.colors.primary} />
-              <Text variant="titleLarge" style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-                Number of Questions
-              </Text>
-            </View>
-            <Text variant="bodyMedium" style={[styles.sectionDescription, { color: theme.colors.onSurfaceVariant }]}>
-              enter a custom number of questions
-            </Text>
-
-            {/* Custom Input */}
-            <View style={styles.customInputSection}>
-
-              <View style={styles.inputContainer}>
-                <Text variant="labelLarge" style={[styles.inputLabel, { color: theme.colors.onSurface }]}>
-                  Custom Number of Questions
-                </Text>
-                <TextInput
-                  style={[
-                    styles.textInput,
-                    {
-                      backgroundColor: isDarkMode ? "#374151" : "#F9FAFB",
-                      color: theme.colors.onSurface,
-                      borderColor: theme.colors.outline,
-                    },
-                  ]}
-                  value={numQuestions}
-                  onChangeText={(text) => {
-                    setNumQuestions(text);
-                    setSelectedPreset(null);
-                  }}
-                  placeholder="Enter number (1-100)"
-                  placeholderTextColor={theme.colors.onSurfaceVariant}
-                  keyboardType="numeric"
-                  maxLength={3}
-                />
-              </View>
-            </View>
-          </View>
-        </Card>
-
-        {/* Summary Section */}
-        {(selectedPreset || numQuestions) && testName && (
-          <Card style={[styles.card, styles.summaryCard, { backgroundColor: theme.colors.surface }]}>
-            <View style={styles.cardContent}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name="checkmark-circle-outline" size={24} color={theme.colors.primary} />
-                <Text variant="titleLarge" style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-                  Test Summary
-                </Text>
-              </View>
-              
-              <View style={styles.summaryDetails}>
-                <View style={styles.summaryRow}>
-                  <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-                    Test Name:
-                  </Text>
-                  <Text variant="bodyMedium" style={[styles.summaryValue, { color: theme.colors.onSurface }]}>
-                    {testName}
-                  </Text>
-                </View>
-                <View style={styles.summaryRow}>
-                  <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-                    Questions:
-                  </Text>
-                  <Text variant="bodyMedium" style={[styles.summaryValue, { color: theme.colors.onSurface }]}>
-                    {selectedPreset || numQuestions} questions
-                  </Text>
-                </View>
-                <View style={styles.summaryRow}>
-                  <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-                    Type:
-                  </Text>
-                  <Chip
-                    mode="outlined"
-                    compact
-                    style={[styles.typeChip, { backgroundColor: theme.colors.primary + "20" }]}
-                    textStyle={{ color: theme.colors.primary, fontSize: 12 }}
-                  >
-                    Manual Entry
-                  </Chip>
-                </View>
-              </View>
-            </View>
-          </Card>
-        )}
-
-        {/* Continue Button */}
-        <TouchableOpacity
-          style={[
-            styles.continueButton,
-            {
-              opacity: (selectedPreset || numQuestions) && testName ? 1 : 0.5,
-            },
-          ]}
-          onPress={handleContinue}
-          disabled={!(selectedPreset || numQuestions) || !testName}
+        <SafeAreaView
+          style={styles.safeAreaContent}
+          edges={["top", "left", "right"]}
         >
-          <LinearGradient
-            colors={["#6366F1", "#8B5CF6"]}
-            style={styles.continueButtonGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            <Text style={styles.continueButtonText}>
-              Start Creating Questions
-            </Text>
-            <Ionicons name="arrow-forward" size={20} color="white" />
-          </LinearGradient>
-        </TouchableOpacity>
+          {/* Header */}
+          <View style={styles.headerGradient}>
+            <View style={styles.headerContent}>
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={() => router.back()}
+              >
+                <Ionicons name="arrow-back" size={24} color="white" />
+              </TouchableOpacity>
+              <View style={styles.headerTextContainer}>
+                <Text variant="headlineMedium" style={styles.headerTitle}>
+                  Create Manual Test
+                </Text>
+                <Text variant="bodyLarge" style={styles.headerSubtitle}>
+                  Set up your test questions manually
+                </Text>
+              </View>
+            </View>
+          </View>
 
-        {/* Bottom Spacing */}
-        <View style={styles.bottomSpacer} />
-      </ScrollView>
-    </SafeAreaView>
+          <ScrollView
+            style={[
+              styles.container,
+              { backgroundColor: theme.colors.background },
+            ]}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Test Name Section */}
+            <Card
+              style={[styles.card, { backgroundColor: theme.colors.surface }]}
+            >
+              <View style={styles.cardContent}>
+                <View style={styles.sectionHeader}>
+                  <Ionicons
+                    name="create-outline"
+                    size={24}
+                    color={theme.colors.primary}
+                  />
+                  <Text
+                    variant="titleLarge"
+                    style={[
+                      styles.sectionTitle,
+                      { color: theme.colors.onSurface },
+                    ]}
+                  >
+                    Test Details
+                  </Text>
+                </View>
+                <Text
+                  variant="bodyMedium"
+                  style={[
+                    styles.sectionDescription,
+                    { color: theme.colors.onSurfaceVariant },
+                  ]}
+                >
+                  Give your test a descriptive name that students will recognize
+                </Text>
+
+                <View style={styles.inputContainer}>
+                  <Text
+                    variant="labelLarge"
+                    style={[
+                      styles.inputLabel,
+                      { color: theme.colors.onSurface },
+                    ]}
+                  >
+                    Test Name *
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.textInput,
+                      {
+                        backgroundColor: isDarkMode ? "#374151" : "#F9FAFB",
+                        color: theme.colors.onSurface,
+                        borderColor: theme.colors.outline,
+                      },
+                    ]}
+                    value={testName}
+                    onChangeText={setTestName}
+                    placeholder="e.g., Mathematics Quiz - Chapter 5"
+                    placeholderTextColor={theme.colors.onSurfaceVariant}
+                    maxLength={100}
+                  />
+                </View>
+              </View>
+            </Card>
+
+            {/* Number of Questions Section */}
+            <Card
+              style={[styles.card, { backgroundColor: theme.colors.surface }]}
+            >
+              <View style={styles.cardContent}>
+                <View style={styles.sectionHeader}>
+                  <Ionicons
+                    name="list-outline"
+                    size={24}
+                    color={theme.colors.primary}
+                  />
+                  <Text
+                    variant="titleLarge"
+                    style={[
+                      styles.sectionTitle,
+                      { color: theme.colors.onSurface },
+                    ]}
+                  >
+                    Number of Questions
+                  </Text>
+                </View>
+                <Text
+                  variant="bodyMedium"
+                  style={[
+                    styles.sectionDescription,
+                    { color: theme.colors.onSurfaceVariant },
+                  ]}
+                >
+                  enter a custom number of questions
+                </Text>
+
+                {/* Custom Input */}
+                <View style={styles.customInputSection}>
+                  <View style={styles.inputContainer}>
+                    <Text
+                      variant="labelLarge"
+                      style={[
+                        styles.inputLabel,
+                        { color: theme.colors.onSurface },
+                      ]}
+                    >
+                      Custom Number of Questions
+                    </Text>
+                    <TextInput
+                      style={[
+                        styles.textInput,
+                        {
+                          backgroundColor: isDarkMode ? "#374151" : "#F9FAFB",
+                          color: theme.colors.onSurface,
+                          borderColor: theme.colors.outline,
+                        },
+                      ]}
+                      value={numQuestions}
+                      onChangeText={(text) => {
+                        setNumQuestions(text);
+                        setSelectedPreset(null);
+                      }}
+                      placeholder="Enter number (1-100)"
+                      placeholderTextColor={theme.colors.onSurfaceVariant}
+                      keyboardType="numeric"
+                      maxLength={3}
+                    />
+                  </View>
+                </View>
+              </View>
+            </Card>
+
+            {/* Summary Section */}
+            {(selectedPreset || numQuestions) && testName && (
+              <Card
+                style={[
+                  styles.card,
+                  styles.summaryCard,
+                  { backgroundColor: theme.colors.surface },
+                ]}
+              >
+                <View style={styles.cardContent}>
+                  <View style={styles.sectionHeader}>
+                    <Ionicons
+                      name="checkmark-circle-outline"
+                      size={24}
+                      color={theme.colors.primary}
+                    />
+                    <Text
+                      variant="titleLarge"
+                      style={[
+                        styles.sectionTitle,
+                        { color: theme.colors.onSurface },
+                      ]}
+                    >
+                      Test Summary
+                    </Text>
+                  </View>
+
+                  <View style={styles.summaryDetails}>
+                    <View style={styles.summaryRow}>
+                      <Text
+                        variant="bodyMedium"
+                        style={{ color: theme.colors.onSurfaceVariant }}
+                      >
+                        Test Name:
+                      </Text>
+                      <Text
+                        variant="bodyMedium"
+                        style={[
+                          styles.summaryValue,
+                          { color: theme.colors.onSurface },
+                        ]}
+                      >
+                        {testName}
+                      </Text>
+                    </View>
+                    <View style={styles.summaryRow}>
+                      <Text
+                        variant="bodyMedium"
+                        style={{ color: theme.colors.onSurfaceVariant }}
+                      >
+                        Questions:
+                      </Text>
+                      <Text
+                        variant="bodyMedium"
+                        style={[
+                          styles.summaryValue,
+                          { color: theme.colors.onSurface },
+                        ]}
+                      >
+                        {selectedPreset || numQuestions} questions
+                      </Text>
+                    </View>
+                    <View style={styles.summaryRow}>
+                      <Text
+                        variant="bodyMedium"
+                        style={{ color: theme.colors.onSurfaceVariant }}
+                      >
+                        Type:
+                      </Text>
+                      <Chip
+                        mode="outlined"
+                        compact
+                        style={[
+                          styles.typeChip,
+                          { backgroundColor: theme.colors.primary + "20" },
+                        ]}
+                        textStyle={{
+                          color: theme.colors.primary,
+                          fontSize: 12,
+                        }}
+                      >
+                        Manual Entry
+                      </Chip>
+                    </View>
+                  </View>
+                </View>
+              </Card>
+            )}
+
+            {/* Continue Button */}
+            <TouchableOpacity
+              style={[
+                styles.continueButton,
+                {
+                  opacity:
+                    (selectedPreset || numQuestions) && testName ? 1 : 0.5,
+                },
+              ]}
+              onPress={handleContinue}
+              disabled={!(selectedPreset || numQuestions) || !testName}
+            >
+              <LinearGradient
+                colors={["#6366F1", "#8B5CF6"]}
+                style={styles.continueButtonGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <Text style={styles.continueButtonText}>
+                  Start Creating Questions
+                </Text>
+                <Ionicons name="arrow-forward" size={20} color="white" />
+              </LinearGradient>
+            </TouchableOpacity>
+
+            {/* Bottom Spacing */}
+            <View style={styles.bottomSpacer} />
+          </ScrollView>
+        </SafeAreaView>
+      </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: {
+    flex: 1,
+  },
+  fullScreenGradient: {
+    flex: 1,
+  },
+  safeAreaContent: {
     flex: 1,
   },
   headerGradient: {

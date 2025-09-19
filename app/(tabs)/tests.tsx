@@ -36,7 +36,7 @@ export default function TestsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const { logout, user } = useAuth();
   const { theme, isDarkMode, toggleTheme } = useTheme();
-  const url=process.env.EXPO_PUBLIC_API_URL;
+  const url = process.env.EXPO_PUBLIC_API_URL;
 
   useEffect(() => {
     fetchPapers();
@@ -45,44 +45,51 @@ export default function TestsScreen() {
   const fetchPapers = async () => {
     try {
       const data = await paperService.getAll();
-      
+
       // Fetch submission counts for each paper
       const papersWithCounts = await Promise.all(
         data.map(async (paper: Paper) => {
           try {
             // Fetch pending submissions count
-            const pendingResponse = await fetch(`${url}/api/submissions/pending-files/${paper.id}`);
-            const evaluatedResponse = await fetch(`${url}/api/submissions/paper/${paper.id}/status/evaluated`);
-            
+            const pendingResponse = await fetch(
+              `${url}/api/submissions/pending-files/${paper.id}`
+            );
+            const evaluatedResponse = await fetch(
+              `${url}/api/submissions/paper/${paper.id}/status/evaluated`
+            );
+
             let pendingCount = 0;
             let evaluatedCount = 0;
-            
+
             if (pendingResponse.ok) {
               const pendingData = await pendingResponse.json();
               pendingCount = pendingData.pendingSubmissions?.length || 0;
             }
-            
+
             if (evaluatedResponse.ok) {
               const evaluatedData = await evaluatedResponse.json();
               evaluatedCount = evaluatedData.submissions?.length || 0;
             }
-            
+
             return {
               ...paper,
               pendingCount,
-              evaluatedCount
+              evaluatedCount,
             };
           } catch (error) {
-            console.error(`Error fetching counts for paper ${paper.id}:`, error);
+            console.error(
+              `Error fetching counts for paper ${paper.id}:`,
+              error
+            );
             return {
               ...paper,
               pendingCount: 0,
-              evaluatedCount: 0
+              evaluatedCount: 0,
             };
           }
         })
       );
-      
+
       setPapers(papersWithCounts);
     } catch (error: any) {
       Alert.alert(
@@ -102,11 +109,11 @@ export default function TestsScreen() {
 
   const viewSubmissions = (paper: Paper) => {
     router.push({
-      pathname: "/(tabs)/submissions",
-      params: { 
+      pathname: "/submissions",
+      params: {
         paperId: paper.id.toString(),
-        paperName: paper.name
-      }
+        paperName: paper.name,
+      },
     });
   };
 
@@ -324,21 +331,14 @@ export default function TestsScreen() {
               </Text>
             </View>
           </View>
-          
+
           {/* Submission Stats Row */}
           <View style={styles.submissionStatsRow}>
             <View style={styles.statItem}>
-              <Ionicons
-                name="time-outline"
-                size={16}
-                color="#F59E0B"
-              />
+              <Ionicons name="time-outline" size={16} color="#F59E0B" />
               <Text
                 variant="bodySmall"
-                style={[
-                  styles.statText,
-                  { color: "#F59E0B" },
-                ]}
+                style={[styles.statText, { color: "#F59E0B" }]}
               >
                 {item.pendingCount || 0} Pending
               </Text>
@@ -351,10 +351,7 @@ export default function TestsScreen() {
               />
               <Text
                 variant="bodySmall"
-                style={[
-                  styles.statText,
-                  { color: "#10B981" },
-                ]}
+                style={[styles.statText, { color: "#10B981" }]}
               >
                 {item.evaluatedCount || 0} Evaluated
               </Text>
@@ -366,7 +363,8 @@ export default function TestsScreen() {
                 { color: theme.colors.onSurfaceVariant },
               ]}
             >
-              Total: {(item.pendingCount || 0) + (item.evaluatedCount || 0)} submissions
+              Total: {(item.pendingCount || 0) + (item.evaluatedCount || 0)}{" "}
+              submissions
             </Text>
           </View>
         </View>
@@ -395,29 +393,23 @@ export default function TestsScreen() {
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.actionButton, styles.primaryActionButton]}
+            style={styles.submissionActionButton}
             onPress={() => viewSubmissions(item)}
           >
             <LinearGradient
               colors={["#6366F1", "#8B5CF6"]}
-              style={styles.actionButtonGradient}
+              style={styles.submissionButtonGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
-              <Ionicons name="people-outline" size={16} color="white" />
+              <Ionicons name="people" size={16} color="white" />
               <Text
                 variant="bodySmall"
-                style={[styles.actionButtonText, { color: "white" }]}
+                style={styles.submissionButtonText}
+                numberOfLines={1}
               >
                 Submissions
               </Text>
-              {((item.pendingCount || 0) + (item.evaluatedCount || 0)) > 0 && (
-                <View style={styles.submissionBadge}>
-                  <Text style={styles.submissionBadgeText}>
-                    {(item.pendingCount || 0) + (item.evaluatedCount || 0)}
-                  </Text>
-                </View>
-              )}
             </LinearGradient>
           </TouchableOpacity>
         </View>
@@ -478,7 +470,9 @@ export default function TestsScreen() {
               onPress={() => router.push("/upload")}
             >
               <LinearGradient
-                colors={isDarkMode ? ["#6366F1", "#8B5CF6"] : ["#6366F1", "#8B5CF6"]}
+                colors={
+                  isDarkMode ? ["#6366F1", "#8B5CF6"] : ["#6366F1", "#8B5CF6"]
+                }
                 style={styles.headerAddButtonGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
@@ -491,7 +485,9 @@ export default function TestsScreen() {
               onPress={() => router.push("/manual-test-setup")}
             >
               <LinearGradient
-                colors={isDarkMode ? ["#22C55E", "#16A34A"] : ["#22C55E", "#16A34A"]}
+                colors={
+                  isDarkMode ? ["#22C55E", "#16A34A"] : ["#22C55E", "#16A34A"]
+                }
                 style={styles.headerAddButtonGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
@@ -630,8 +626,8 @@ const styles = StyleSheet.create({
   },
   testCard: {
     borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
+    padding: 16,
+    marginBottom: 12,
     elevation: 3,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -642,7 +638,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 16,
+    marginBottom: 12,
   },
   cardTitleSection: {
     flex: 1,
@@ -677,7 +673,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   cardStats: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   statRow: {
     flexDirection: "row",
@@ -741,6 +737,25 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 6,
   },
+  submissionActionButton: {
+    flex: 1,
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  submissionButtonGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    gap: 6,
+  },
+  submissionButtonText: {
+    color: "white",
+    fontSize: 13,
+    fontWeight: "500",
+  },
   primaryActionButton: {
     backgroundColor: "#6366F1",
     overflow: "hidden",
@@ -748,20 +763,6 @@ const styles = StyleSheet.create({
   actionButtonText: {
     fontSize: 13,
     fontWeight: "500",
-  },
-  submissionBadge: {
-    backgroundColor: "rgba(255,255,255,0.2)",
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    marginLeft: 4,
-    minWidth: 20,
-    alignItems: "center",
-  },
-  submissionBadgeText: {
-    color: "white",
-    fontSize: 11,
-    fontWeight: "600",
   },
   loadingContainer: {
     flex: 1,
