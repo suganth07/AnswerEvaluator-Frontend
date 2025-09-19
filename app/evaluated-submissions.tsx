@@ -52,29 +52,41 @@ export default function EvaluatedSubmissionsScreen() {
     try {
       setLoading(true);
 
-      const response = await fetch(`${url}/api/submissions/paper/${paperId}/status/evaluated`);
+      const apiUrl = `${url}/api/submissions/paper/${paperId}/status/evaluated`;
+      console.log('Fetching evaluated submissions from:', apiUrl);
+
+      const response = await fetch(apiUrl);
 
       if (response.ok) {
         const data = await response.json();
-        console.log('Fetched evaluated submissions:', data);
+        console.log('Raw API response:', data);
+        console.log('Submissions array:', data.submissions);
         
         // Ensure we have the latest data with proper field mapping
-        const processedSubmissions = (data.submissions || []).map((submission: any) => ({
-          id: submission.id,
-          paperId: submission.paper_id || submission.paperId,
-          studentName: submission.student_name || submission.studentName,
-          rollNo: submission.roll_no || submission.rollNo,
-          score: submission.score,
-          totalQuestions: submission.total_questions || submission.totalQuestions,
-          percentage: submission.percentage,
-          evaluationStatus: submission.evaluation_status || submission.evaluationStatus,
-          evaluationMethod: submission.evaluation_method || submission.evaluationMethod,
-          submittedAt: submission.submitted_at || submission.submittedAt || submission.uploadedAt
-        }));
+        const processedSubmissions = (data.submissions || []).map((submission: any, index: number) => {
+          console.log(`Processing submission ${index}:`, submission);
+          
+          const processed = {
+            id: submission.id,
+            paperId: submission.paper_id || submission.paperId,
+            studentName: submission.student_name || submission.studentName,
+            rollNo: submission.roll_no || submission.rollNo,
+            score: submission.score,
+            totalQuestions: submission.total_questions || submission.totalQuestions,
+            percentage: submission.percentage,
+            evaluationStatus: submission.evaluation_status || submission.evaluationStatus,
+            evaluationMethod: submission.evaluation_method || submission.evaluationMethod,
+            submittedAt: submission.submitted_at || submission.submittedAt || submission.uploadedAt
+          };
+          
+          console.log(`Processed submission ${index}:`, processed);
+          return processed;
+        });
         
-        console.log('Processed submissions:', processedSubmissions);
+        console.log('Final processed submissions:', processedSubmissions);
         setEvaluatedSubmissions(processedSubmissions);
       } else {
+        console.error('API response not OK:', response.status, response.statusText);
         throw new Error('Failed to fetch evaluated submissions');
       }
     } catch (error: any) {

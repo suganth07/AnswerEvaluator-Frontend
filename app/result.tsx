@@ -20,10 +20,28 @@ import { submissionService } from '../services/api';
 import { useTheme } from '../context/ThemeContext';
 
 interface Answer {
-  question_number: number;
-  extracted_answer: string;
-  correct_answer: string;
-  is_correct: boolean;
+  // Original StudentAnswer fields (camelCase from Prisma)
+  id: number;
+  submissionId: number;
+  questionNumber: number;
+  selectedOption?: string;
+  isCorrect: boolean;
+  textAnswer?: string;
+  blankAnswers?: any;
+  answerType: string;
+  selectedOptions?: any;
+  
+  // Legacy snake_case fields for backward compatibility
+  question_number?: number;
+  extracted_answer?: string;
+  correct_answer?: string;
+  is_correct?: boolean;
+  
+  // Merged question details from backend
+  questionText?: string;
+  correctOptions?: any;
+  options?: any;
+  questionFormat?: string;
 }
 
 interface SubmissionDetails {
@@ -267,37 +285,39 @@ export default function ResultScreen() {
               </Paragraph>
             </Card.Content>
             
-            {submission.answers.map((answer, index) => (
-              <View key={index}>
-                <List.Item
-                  title={`Question ${answer.question_number}`}
-                  description={`Your answer: ${answer.extracted_answer || 'Not detected'} | Correct: ${answer.correct_answer}`}
-                  left={() => (
-                    <View style={styles.questionIcon}>
-                      <Paragraph style={[
-                        styles.questionNumber,
-                        { 
-                          backgroundColor: answer.is_correct ? '#4caf50' : '#f44336',
-                          color: 'white'
-                        }
-                      ]}>
-                        {answer.question_number}
-                      </Paragraph>
-                    </View>
-                  )}
+            {submission.answers.map((answer, index) => {
+              console.log(`Answer ${index}:`, answer); // Debug logging
+              return (
+                <View key={index}>
+                  <List.Item
+                    title={`Question ${answer.questionNumber || answer.question_number || index + 1}: ${answer.questionText || 'Question text not available'}`}
+                    description={`Your answer: ${answer.selectedOption || answer.textAnswer || answer.extracted_answer || 'Not detected'} | Correct: ${answer.correctOptions ? (Array.isArray(answer.correctOptions) ? answer.correctOptions.join(', ') : answer.correctOptions) : answer.correct_answer || 'Not available'}`}
+                    left={() => (
+                      <View style={styles.questionIcon}>
+                        <Paragraph style={[
+                          styles.questionNumber,
+                          { 
+                            backgroundColor: (answer.isCorrect || answer.is_correct) ? '#4caf50' : '#f44336',
+                            color: 'white'
+                          }
+                        ]}>
+                          {answer.questionNumber || answer.question_number || index + 1}
+                        </Paragraph>
+                      </View>
+                    )}
                   right={() => (
                     <Chip 
                       mode="outlined"
                       compact
                       textStyle={{ 
-                        color: answer.is_correct ? '#4caf50' : '#f44336',
+                        color: (answer.isCorrect || answer.is_correct) ? '#4caf50' : '#f44336',
                         fontSize: 12
                       }}
                       style={{ 
-                        borderColor: answer.is_correct ? '#4caf50' : '#f44336'
+                        borderColor: (answer.isCorrect || answer.is_correct) ? '#4caf50' : '#f44336'
                       }}
                     >
-                      {answer.is_correct ? 'Correct' : 'Incorrect'}
+                      {(answer.isCorrect || answer.is_correct) ? 'Correct' : 'Incorrect'}
                     </Chip>
                   )}
                   titleStyle={styles.questionTitle}
@@ -305,7 +325,8 @@ export default function ResultScreen() {
                 />
                 {index < submission.answers.length - 1 && <Divider />}
               </View>
-            ))}
+              );
+            })}
           </Card>
         )}
 
