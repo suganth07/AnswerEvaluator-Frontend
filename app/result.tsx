@@ -55,22 +55,41 @@ export default function ResultScreen() {
         console.log('Loading detailed submission data for ID:', params.submissionId);
         const details = await submissionService.getDetails(params.submissionId as string);
         console.log('Received detailed submission:', details);
-        setSubmission(details);
+        
+        // Process the submission details with proper field mapping
+        const processedSubmission = {
+          id: details.id,
+          student_name: details.student_name || details.studentName || 'Unknown Student',
+          paper_name: details.paper_name || details.paperName || params.paperName || 'Unknown Paper',
+          score: Number(details.score) || 0,
+          total_questions: Number(details.total_questions || details.totalQuestions) || 0,
+          percentage: Number(details.percentage) || 0,
+          submitted_at: details.submitted_at || details.submittedAt || new Date().toISOString(),
+          answers: details.answers || []
+        };
+        
+        console.log('Processed submission:', processedSubmission);
+        setSubmission(processedSubmission);
       } else {
         console.log('Using params for quick display');
         // Create submission object from params for quick display
+        const score = Number(params.score) || 0;
+        const total = Number(params.total) || 0;
+        const percentage = total > 0 ? (score / total) * 100 : Number(params.percentage) || 0;
+        
         setSubmission({
           id: 0,
-          student_name: params.studentName as string,
-          paper_name: params.paperName as string,
-          score: Number(params.score) || 0,
-          total_questions: Number(params.total) || 0,
-          percentage: Number(params.percentage) || 0,
+          student_name: params.studentName as string || 'Unknown Student',
+          paper_name: params.paperName as string || 'Unknown Paper',
+          score: score,
+          total_questions: total,
+          percentage: percentage,
           submitted_at: new Date().toISOString(),
           answers: []
         });
       }
     } catch (error) {
+      console.error('Error loading submission details:', error);
       Alert.alert('Error', 'Failed to load submission details');
     } finally {
       setLoading(false);
@@ -93,13 +112,21 @@ export default function ResultScreen() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        return 'Invalid Date';
+      }
+      return date.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch (error) {
+      return 'Invalid Date';
+    }
   };
 
   if (loading) {
@@ -158,8 +185,8 @@ export default function ResultScreen() {
                 style={[
                   styles.progressFill, 
                   { 
-                    width: `${submission.percentage}%`,
-                    backgroundColor: getScoreColor(submission.percentage)
+                    width: `${Math.min(Math.max(submission.percentage || 0, 0), 100)}%`,
+                    backgroundColor: getScoreColor(submission.percentage || 0)
                   }
                 ]} 
               />
@@ -221,9 +248,9 @@ export default function ResultScreen() {
             </View>
             
             <Paragraph style={styles.performanceText}>
-              {submission.percentage >= 80 
+              {(submission.percentage || 0) >= 80 
                 ? "Excellent work! You have a strong understanding of the material." 
-                : submission.percentage >= 60 
+                : (submission.percentage || 0) >= 60 
                 ? "Good effort! Review the incorrect answers to improve your understanding."
                 : "Keep studying! Focus on the areas where you had incorrect answers."}
             </Paragraph>

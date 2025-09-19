@@ -36,6 +36,7 @@ export default function TestsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const { logout, user } = useAuth();
   const { theme, isDarkMode, toggleTheme } = useTheme();
+  const url=process.env.EXPO_PUBLIC_API_URL;
 
   useEffect(() => {
     fetchPapers();
@@ -50,8 +51,8 @@ export default function TestsScreen() {
         data.map(async (paper: Paper) => {
           try {
             // Fetch pending submissions count
-            const pendingResponse = await fetch(`http://10.136.69.32:3000/api/submissions/pending-files/${paper.id}`);
-            const evaluatedResponse = await fetch(`http://10.136.69.32:3000/api/submissions/paper/${paper.id}/status/evaluated`);
+            const pendingResponse = await fetch(`${url}/api/submissions/pending-files/${paper.id}`);
+            const evaluatedResponse = await fetch(`${url}/api/submissions/paper/${paper.id}/status/evaluated`);
             
             let pendingCount = 0;
             let evaluatedCount = 0;

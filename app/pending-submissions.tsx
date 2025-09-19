@@ -39,6 +39,8 @@ export default function PendingSubmissionsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [evaluating, setEvaluating] = useState<string | null>(null);
   const { theme, isDarkMode } = useTheme();
+  const url = process.env.EXPO_PUBLIC_API_URL;
+
 
   useEffect(() => {
     fetchPendingSubmissions();
@@ -47,9 +49,9 @@ export default function PendingSubmissionsScreen() {
   const fetchPendingSubmissions = async () => {
     try {
       setLoading(true);
-      
-      const response = await fetch(`http://10.136.69.32:3000/api/submissions/pending-files/${paperId}`);
-      
+
+      const response = await fetch(`${url}/api/submissions/pending-files/${paperId}`);
+
       if (response.ok) {
         const data = await response.json();
         setPendingSubmissions(data.pendingSubmissions || []);
@@ -89,7 +91,7 @@ export default function PendingSubmissionsScreen() {
 
       console.log('Evaluation request body:', requestBody);
 
-      const response = await fetch('http://10.136.69.32:3000/api/submissions/evaluate-pending', {
+      const response = await fetch(`${url}/api/submissions/evaluate-pending`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

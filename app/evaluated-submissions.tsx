@@ -14,6 +14,7 @@ import { useTheme } from "../context/ThemeContext";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { PieChart } from "react-native-chart-kit";
 
 const { width } = Dimensions.get("window");
 
@@ -40,6 +41,8 @@ export default function EvaluatedSubmissionsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const { theme, isDarkMode } = useTheme();
+  const url = process.env.EXPO_PUBLIC_API_URL;
+
 
   useEffect(() => {
     fetchEvaluatedSubmissions();
@@ -48,12 +51,29 @@ export default function EvaluatedSubmissionsScreen() {
   const fetchEvaluatedSubmissions = async () => {
     try {
       setLoading(true);
-      
-      const response = await fetch(`http://10.136.69.32:3000/api/submissions/paper/${paperId}/status/evaluated`);
-      
+
+      const response = await fetch(`${url}/api/submissions/paper/${paperId}/status/evaluated`);
+
       if (response.ok) {
         const data = await response.json();
-        setEvaluatedSubmissions(data.submissions || []);
+        console.log('Fetched evaluated submissions:', data);
+        
+        // Ensure we have the latest data with proper field mapping
+        const processedSubmissions = (data.submissions || []).map((submission: any) => ({
+          id: submission.id,
+          paperId: submission.paper_id || submission.paperId,
+          studentName: submission.student_name || submission.studentName,
+          rollNo: submission.roll_no || submission.rollNo,
+          score: submission.score,
+          totalQuestions: submission.total_questions || submission.totalQuestions,
+          percentage: submission.percentage,
+          evaluationStatus: submission.evaluation_status || submission.evaluationStatus,
+          evaluationMethod: submission.evaluation_method || submission.evaluationMethod,
+          submittedAt: submission.submitted_at || submission.submittedAt || submission.uploadedAt
+        }));
+        
+        console.log('Processed submissions:', processedSubmissions);
+        setEvaluatedSubmissions(processedSubmissions);
       } else {
         throw new Error('Failed to fetch evaluated submissions');
       }
@@ -69,6 +89,114 @@ export default function EvaluatedSubmissionsScreen() {
   const onRefresh = () => {
     setRefreshing(true);
     fetchEvaluatedSubmissions();
+  };
+
+  const safePercentage = (value: any): number => {
+    if (value === null || value === undefined || value === '') return 0;
+    const num = Number(value);
+    return isNaN(num) ? 0 : num;
+  };
+
+  // Calculate score distribution for pie chart
+  const calculateScoreDistribution = (submissions: EvaluatedSubmission[]) => {
+    if (submissions.length === 0) {
+      return [
+        { name: "No Data", population: 100, color: "#E5E7EB", legendFontColor: isDarkMode ? "#E5E7EB" : "#374151", legendFontSize: 12 }
+      ];
+    }
+
+    let lowScore = 0;   // 0-40%
+    let midScore = 0;   // 40-80%
+    let highScore = 0;  // 80-100%
+
+    submissions.forEach(submission => {
+      const percentage = safePercentage(submission.percentage);
+      if (percentage < 40) {
+        lowScore++;
+      } else if (percentage < 80) {
+        midScore++;
+      } else {
+        highScore++;
+      }
+    });
+
+    const total = submissions.length;
+    const data = [];
+
+    if (lowScore > 0) {
+      data.push({
+        name: `0-40% (${lowScore})`,
+        population: Math.round((lowScore / total) * 100),
+        color: "#EF4444", // Red
+        legendFontColor: isDarkMode ? "#E5E7EB" : "#374151",
+        legendFontSize: 12
+      });
+    }
+
+    if (midScore > 0) {
+      data.push({
+        name: `40-80% (${midScore})`,
+        population: Math.round((midScore / total) * 100),
+        color: "#F59E0B", // Yellow/Orange
+        legendFontColor: isDarkMode ? "#E5E7EB" : "#374151",
+        legendFontSize: 12
+      });
+    }
+
+    if (highScore > 0) {
+      data.push({
+        name: `80-100% (${highScore})`,
+        population: Math.round((highScore / total) * 100),
+        color: "#22C55E", // Green
+        legendFontColor: isDarkMode ? "#E5E7EB" : "#374151",
+        legendFontSize: 12
+      });
+    }
+
+    return data.length > 0 ? data : [
+      { name: "No Data", population: 100, color: "#E5E7EB", legendFontColor: isDarkMode ? "#E5E7EB" : "#374151", legendFontSize: 12 }
+    ];
+  };
+
+  // Score Distribution Chart Component
+  const ScoreDistributionChart = ({ submissions }: { submissions: EvaluatedSubmission[] }) => {
+    const chartData = calculateScoreDistribution(submissions);
+    
+    if (submissions.length === 0) {
+      return (
+        <View style={[styles.noDataContainer, { backgroundColor: isDarkMode ? "rgba(255, 255, 255, 0.05)" : "rgba(99, 102, 241, 0.05)" }]}>
+          <Text variant="bodyMedium" style={{ color: theme.colors.onSurface }}>
+            No submissions data available for chart
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={[styles.chartContainer, { backgroundColor: isDarkMode ? "rgba(255, 255, 255, 0.05)" : "rgba(99, 102, 241, 0.05)" }]}>
+        <Text variant="titleMedium" style={[styles.chartTitle, { color: theme.colors.onSurface }]}>
+          Score Distribution ({submissions.length} students)
+        </Text>
+        <PieChart
+          data={chartData}
+          width={Math.min(width - 40, 350)}
+          height={180}
+          chartConfig={{
+            backgroundGradientFrom: theme.colors.background,
+            backgroundGradientTo: theme.colors.background,
+            color: (opacity = 1) => `rgba(99, 102, 241, ${opacity})`,
+            strokeWidth: 2,
+            barPercentage: 0.5,
+            useShadowColorFromDataset: false,
+          }}
+          accessor="population"
+          backgroundColor="transparent"
+          paddingLeft="15"
+          center={[0, 0]}
+          absolute
+        />
+      </View>
+    );
   };
 
   const formatDate = (dateString: string) => {
@@ -251,14 +379,14 @@ export default function EvaluatedSubmissionsScreen() {
   );
   
   const averageScore = validSubmissions.length > 0 
-    ? validSubmissions.reduce((sum, sub) => sum + (sub.percentage || 0), 0) / validSubmissions.length 
+    ? validSubmissions.reduce((sum, sub) => sum + safePercentage(sub.percentage), 0) / validSubmissions.length 
     : 0;
   
   const highestScore = validSubmissions.length > 0 
-    ? Math.max(...validSubmissions.map(sub => sub.percentage || 0)) 
+    ? Math.max(...validSubmissions.map(sub => safePercentage(sub.percentage))) 
     : 0;
   
-  const passedStudents = validSubmissions.filter(sub => (sub.percentage || 0) >= 60).length;
+  const passedStudents = validSubmissions.filter(sub => safePercentage(sub.percentage) >= 60).length;
   const passRate = validSubmissions.length > 0 ? (passedStudents / validSubmissions.length) * 100 : 0;
 
   if (loading) {
@@ -324,6 +452,11 @@ export default function EvaluatedSubmissionsScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
+        {/* Score Distribution Chart */}
+        {totalSubmissions > 0 && (
+          <ScoreDistributionChart submissions={evaluatedSubmissions} />
+        )}
+
         {/* Summary Statistics */}
         {totalSubmissions > 0 && (
           <Card style={[styles.summaryCard, { backgroundColor: theme.colors.surface }]}>
@@ -379,7 +512,7 @@ export default function EvaluatedSubmissionsScreen() {
               Student Results ({totalSubmissions} submissions)
             </Text>
             {evaluatedSubmissions
-              .sort((a, b) => (b.percentage || 0) - (a.percentage || 0)) // Sort by score descending with fallback
+              .sort((a, b) => safePercentage(b.percentage) - safePercentage(a.percentage)) // Sort by score descending with safe handling
               .map((submission) => (
                 <EvaluatedSubmissionCard
                   key={submission.id}
@@ -638,5 +771,27 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 100,
+  },
+  chartContainer: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    marginHorizontal: 20,
+    borderWidth: 1,
+    borderColor: "rgba(99, 102, 241, 0.2)",
+  },
+  chartTitle: {
+    fontWeight: "600",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  noDataContainer: {
+    padding: 20,
+    alignItems: "center",
+    borderRadius: 12,
+    marginBottom: 16,
+    marginHorizontal: 20,
+    borderWidth: 1,
+    borderColor: "rgba(99, 102, 241, 0.2)",
   },
 });

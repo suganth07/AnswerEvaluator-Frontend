@@ -20,7 +20,8 @@ import { useTheme } from '../context/ThemeContext';
 import { router } from 'expo-router';
 
 const { width } = Dimensions.get('window');
-const API_BASE_URL = 'http://10.128.13.32:3000';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+
 
 interface Paper {
   id: number;

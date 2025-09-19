@@ -36,6 +36,7 @@ export default function SubmissionsScreen() {
   const [pendingCount, setPendingCount] = useState(0);
   const [evaluatedCount, setEvaluatedCount] = useState(0);
   const { theme, isDarkMode } = useTheme();
+  const url = process.env.EXPO_PUBLIC_API_URL;
 
   useEffect(() => {
     fetchSubmissionsData();
@@ -65,10 +66,10 @@ export default function SubmissionsScreen() {
   const fetchSubmissionCounts = async () => {
     try {
       // Fetch pending files count from Google Drive
-      const pendingResponse = await fetch(`http://10.136.69.32:3000/api/submissions/pending-files/${paperId}`);
+      const pendingResponse = await fetch(`${url}/api/submissions/pending-files/${paperId}`);
       // Fetch evaluated submissions count from database
-      const evaluatedResponse = await fetch(`http://10.136.69.32:3000/api/submissions/paper/${paperId}/status/evaluated`);
-      
+      const evaluatedResponse = await fetch(`${url}/api/submissions/paper/${paperId}/status/evaluated`);
+
       if (pendingResponse.ok) {
         const pendingData = await pendingResponse.json();
         setPendingCount(pendingData.pendingSubmissions?.length || 0);

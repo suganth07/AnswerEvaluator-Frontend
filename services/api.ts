@@ -4,12 +4,8 @@ import { Platform } from "react-native";
 
 // Get local IP for same WiFi network access
 const getAPIUrl = () => {
-  if (Platform.OS === "android") {
-    // For Android Expo Go, use your computer's IP address
-    // Updated to use your actual local IP address
-    return "http://10.136.69.32:3000";
-  }
-  return "http://10.136.69.32:3000"; // Use same IP for iOS as well
+  const url=process.env.EXPO_PUBLIC_API_URL;
+  return url; // Use same IP for iOS as well
 };
 
 const API_BASE_URL = getAPIUrl();

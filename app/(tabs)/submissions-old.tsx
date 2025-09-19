@@ -56,6 +56,8 @@ export default function SubmissionsScreen() {
   const [evaluatedSearch, setEvaluatedSearch] = useState('');
   const [evaluatingId, setEvaluatingId] = useState<number | null>(null);
   const { theme, isDarkMode } = useTheme();
+  const url = process.env.EXPO_PUBLIC_API_URL;
+
 
   useEffect(() => {
     fetchSubmissionsData();
@@ -70,9 +72,9 @@ export default function SubmissionsScreen() {
         const paper = await paperService.getDetails(paperId);
         
         // Fetch pending and evaluated submissions separately
-        const pendingResponse = await fetch(`http://10.128.13.32:3000/api/submissions/paper/${paperId}/status/pending`);
-        const evaluatedResponse = await fetch(`http://10.128.13.32:3000/api/submissions/paper/${paperId}/status/evaluated`);
-        
+        const pendingResponse = await fetch(`${url}/api/submissions/paper/${paperId}/status/pending`);
+        const evaluatedResponse = await fetch(`${url}/api/submissions/paper/${paperId}/status/evaluated`);
+
         const pendingSubmissions = pendingResponse.ok ? await pendingResponse.json() : [];
         const evaluatedSubmissions = evaluatedResponse.ok ? await evaluatedResponse.json() : [];
         
@@ -89,9 +91,9 @@ export default function SubmissionsScreen() {
         const papersWithSubmissions = await Promise.all(
           papersData.map(async (paper: Paper) => {
             try {
-              const pendingResponse = await fetch(`http://10.128.13.32:3000/api/submissions/paper/${paper.id}/status/pending`);
-              const evaluatedResponse = await fetch(`http://10.128.13.32:3000/api/submissions/paper/${paper.id}/status/evaluated`);
-              
+              const pendingResponse = await fetch(`${url}/api/submissions/paper/${paper.id}/status/pending`);
+              const evaluatedResponse = await fetch(`${url}/api/submissions/paper/${paper.id}/status/evaluated`);
+
               const pendingSubmissions = pendingResponse.ok ? await pendingResponse.json() : [];
               const evaluatedSubmissions = evaluatedResponse.ok ? await evaluatedResponse.json() : [];
               
@@ -131,7 +133,7 @@ export default function SubmissionsScreen() {
     setEvaluatingId(submissionId);
     
     try {
-      const response = await fetch(`http://10.128.13.32:3000/api/submissions/evaluate/${submissionId}`, {
+      const response = await fetch(`${url}/api/submissions/evaluate/${submissionId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
