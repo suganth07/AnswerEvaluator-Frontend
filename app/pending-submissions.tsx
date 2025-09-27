@@ -104,7 +104,7 @@ export default function PendingSubmissionsScreen() {
         console.log('Evaluation result:', result);
         Alert.alert(
           "Evaluation Complete",
-          `${submission.studentName} scored ${result.score}/${result.totalQuestions} (${result.percentage.toFixed(1)}%)`,
+          `${submission.studentName} scored ${result.score}/${result.maxPossibleScore || result.totalQuestions} (${result.percentage.toFixed(1)}%)`,
           [
             {
               text: "View Results",
@@ -116,7 +116,7 @@ export default function PendingSubmissionsScreen() {
                     studentName: submission.studentName,
                     paperName: paperName,
                     score: result.score.toString(),
-                    total: result.totalQuestions.toString(),
+                    total: (result.maxPossibleScore || result.totalQuestions).toString(),
                     percentage: result.percentage.toString()
                   }
                 });

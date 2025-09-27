@@ -6,6 +6,7 @@ import {
   Alert,
   Text,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Card,
   Title,
@@ -202,7 +203,12 @@ export default function ResultScreen() {
   }
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+      <ScrollView 
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+        contentContainerStyle={{ flexGrow: 1 }}
+        showsVerticalScrollIndicator={true}
+      >
       <View style={[styles.header, { backgroundColor: theme.colors.surface }]}>
         <Title style={[styles.headerTitle, { color: theme.colors.onSurface }]}>Evaluation Results</Title>
         <Paragraph style={[styles.headerSubtitle, { color: theme.colors.onSurfaceVariant }]}>
@@ -233,7 +239,6 @@ export default function ResultScreen() {
                 <Paragraph style={[styles.percentageText, { color: theme.colors.onSurfaceVariant }]}>
                     {Number(submission.percentage || 0).toFixed(1)}%
                 </Paragraph>
-
               </View>
             </View>
             
@@ -503,6 +508,7 @@ export default function ResultScreen() {
         </Card>
       </View>
     </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -536,7 +542,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: 'white',
     padding: 20,
-    paddingTop: 60,
+    paddingTop: 20, // Reduced since we're using SafeAreaView
     elevation: 2,
   },
   headerTitle: {
@@ -550,6 +556,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
+    paddingBottom: 100, // Extra bottom padding to ensure content is visible
   },
   scoreCard: {
     marginBottom: 20,
