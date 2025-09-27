@@ -4,6 +4,7 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  Text,
 } from 'react-native';
 import {
   Card,
@@ -42,6 +43,12 @@ interface Answer {
   correctOptions?: any;
   options?: any;
   questionFormat?: string;
+  
+  // NEW: Weightage-based evaluation fields
+  partialScore?: number;
+  maxPoints?: number;
+  details?: string;
+  weightageBreakdown?: Array<{ option: string; weight: number }>;
 }
 
 interface SubmissionDetails {
@@ -53,6 +60,11 @@ interface SubmissionDetails {
   percentage: number;
   submitted_at: string;
   answers: Answer[];
+  
+  // NEW: Evaluation method information
+  evaluationMethod?: 'traditional' | 'weightage';
+  maxPossibleScore?: number;
+  evaluationDetails?: string;
 }
 
 export default function ResultScreen() {
@@ -60,6 +72,28 @@ export default function ResultScreen() {
   const [submission, setSubmission] = useState<SubmissionDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const { theme } = useTheme();
+
+  useEffect(() => {
+    loadSubmissionDetails();
+  }, []);
+
+  // Helper function to detect if this is a weightage-based evaluation
+  const isWeightageBasedEvaluation = (submission: SubmissionDetails): boolean => {
+    return submission.answers?.some(answer => 
+      answer.weightageBreakdown && answer.weightageBreakdown.length > 0
+    ) || false;
+  };
+
+  // Helper function to format weightage breakdown
+  const formatWeightageBreakdown = (breakdown: Array<{ option: string; weight: number }>): string => {
+    if (!breakdown || breakdown.length === 0) return '';
+    return breakdown.map(item => `${item.option}(${item.weight})`).join(' + ');
+  };
+
+  // Helper function to get evaluation method display name
+  const getEvaluationMethodName = (submission: SubmissionDetails): string => {
+    return isWeightageBasedEvaluation(submission) ? 'Weightage-Based Evaluation' : 'Traditional Evaluation';
+  };
 
   useEffect(() => {
     loadSubmissionDetails();
@@ -212,6 +246,39 @@ export default function ResultScreen() {
           </Card.Content>
         </Card>
 
+        {/* Evaluation Method Information */}
+        {isWeightageBasedEvaluation(submission) && (
+          <Card style={[styles.card, styles.evaluationMethodCard, { backgroundColor: theme.colors.surface, borderColor: '#2196f3' }]}>
+            <Card.Content>
+              <View style={styles.evaluationMethodHeader}>
+                <Title style={[styles.cardTitle, { color: '#2196f3' }]}>🎯 {getEvaluationMethodName(submission)}</Title>
+                <Chip 
+                  mode="outlined" 
+                  compact
+                  textStyle={{ color: '#2196f3', fontSize: 10 }}
+                  style={{ borderColor: '#2196f3', height: 24 }}
+                >
+                  Advanced
+                </Chip>
+              </View>
+              <Paragraph style={[styles.evaluationDescription, { color: theme.colors.onSurfaceVariant }]}>
+                This test uses weightage-based scoring where different correct options carry different point values.
+              </Paragraph>
+              <View style={styles.evaluationRules}>
+                <Paragraph style={[styles.evaluationRule, { color: theme.colors.onSurfaceVariant }]}>
+                  ✅ <Text style={{ fontWeight: 'bold' }}>Only correct options:</Text> Sum of their weightages
+                </Paragraph>
+                <Paragraph style={[styles.evaluationRule, { color: theme.colors.onSurfaceVariant }]}>
+                  ❌ <Text style={{ fontWeight: 'bold' }}>Any wrong option:</Text> Zero marks (no partial credit)
+                </Paragraph>
+                <Paragraph style={[styles.evaluationRule, { color: theme.colors.onSurfaceVariant }]}>
+                  🎯 <Text style={{ fontWeight: 'bold' }}>All correct options:</Text> Full marks for that question
+                </Paragraph>
+              </View>
+            </Card.Content>
+          </Card>
+        )}
+
         {/* Student Information */}
         <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
           <Card.Content>
@@ -236,41 +303,94 @@ export default function ResultScreen() {
           <Card.Content>
             <Title style={styles.cardTitle}>Performance Analysis</Title>
             <View style={styles.statsContainer}>
-              <View style={styles.statItem}>
-                <Chip 
-                  mode="outlined" 
-                  textStyle={{ color: '#4caf50' }}
-                  style={{ borderColor: '#4caf50' }}
-                >
-                  {submission.score} Correct
-                </Chip>
-              </View>
-              <View style={styles.statItem}>
-                <Chip 
-                  mode="outlined"
-                  textStyle={{ color: '#f44336' }}
-                  style={{ borderColor: '#f44336' }}
-                >
-                  {submission.total_questions - submission.score} Incorrect
-                </Chip>
-              </View>
-              <View style={styles.statItem}>
-                <Chip 
-                  mode="outlined"
-                  textStyle={{ color: '#2196f3' }}
-                  style={{ borderColor: '#2196f3' }}
-                >
-                  {submission.total_questions} Total
-                </Chip>
-              </View>
+              {isWeightageBasedEvaluation(submission) ? (
+                <>
+                  {/* Weightage-based statistics */}
+                  <View style={styles.statItem}>
+                    <Chip 
+                      mode="outlined" 
+                      textStyle={{ color: '#4caf50' }}
+                      style={{ borderColor: '#4caf50' }}
+                    >
+                      {submission.score.toFixed(1)} Earned
+                    </Chip>
+                  </View>
+                  <View style={styles.statItem}>
+                    <Chip 
+                      mode="outlined"
+                      textStyle={{ color: '#2196f3' }}
+                      style={{ borderColor: '#2196f3' }}
+                    >
+                      {submission.maxPossibleScore || submission.total_questions} Max
+                    </Chip>
+                  </View>
+                  <View style={styles.statItem}>
+                    <Chip 
+                      mode="outlined"
+                      textStyle={{ color: '#ff9800' }}
+                      style={{ borderColor: '#ff9800' }}
+                    >
+                      {submission.answers.filter(a => a.partialScore && a.partialScore > 0 && a.partialScore < (a.maxPoints || 1)).length} Partial
+                    </Chip>
+                  </View>
+                  <View style={styles.statItem}>
+                    <Chip 
+                      mode="outlined"
+                      textStyle={{ color: '#f44336' }}
+                      style={{ borderColor: '#f44336' }}
+                    >
+                      {submission.answers.filter(a => a.details && a.details.includes('Wrong option')).length} Zero (Wrong)
+                    </Chip>
+                  </View>
+                </>
+              ) : (
+                <>
+                  {/* Traditional statistics */}
+                  <View style={styles.statItem}>
+                    <Chip 
+                      mode="outlined" 
+                      textStyle={{ color: '#4caf50' }}
+                      style={{ borderColor: '#4caf50' }}
+                    >
+                      {submission.score} Correct
+                    </Chip>
+                  </View>
+                  <View style={styles.statItem}>
+                    <Chip 
+                      mode="outlined"
+                      textStyle={{ color: '#f44336' }}
+                      style={{ borderColor: '#f44336' }}
+                    >
+                      {submission.total_questions - submission.score} Incorrect
+                    </Chip>
+                  </View>
+                  <View style={styles.statItem}>
+                    <Chip 
+                      mode="outlined"
+                      textStyle={{ color: '#2196f3' }}
+                      style={{ borderColor: '#2196f3' }}
+                    >
+                      {submission.total_questions} Total
+                    </Chip>
+                  </View>
+                </>
+              )}
             </View>
             
             <Paragraph style={styles.performanceText}>
-              {(submission.percentage || 0) >= 80 
-                ? "Excellent work! You have a strong understanding of the material." 
-                : (submission.percentage || 0) >= 60 
-                ? "Good effort! Review the incorrect answers to improve your understanding."
-                : "Keep studying! Focus on the areas where you had incorrect answers."}
+              {isWeightageBasedEvaluation(submission) ? (
+                (submission.percentage || 0) >= 80 
+                  ? "Excellent! You've mastered the weightage-based evaluation system and demonstrated strong understanding." 
+                  : (submission.percentage || 0) >= 60 
+                  ? "Good work! Remember: any wrong option means zero marks for that question. Focus on accuracy."
+                  : "Keep practicing! In weightage-based tests, accuracy is crucial - wrong options eliminate partial credit."
+              ) : (
+                (submission.percentage || 0) >= 80 
+                  ? "Excellent work! You have a strong understanding of the material." 
+                  : (submission.percentage || 0) >= 60 
+                  ? "Good effort! Review the incorrect answers to improve your understanding."
+                  : "Keep studying! Focus on the areas where you had incorrect answers."
+              )}
             </Paragraph>
           </Card.Content>
         </Card>
@@ -281,23 +401,71 @@ export default function ResultScreen() {
             <Card.Content>
               <Title style={styles.cardTitle}>Question-wise Results</Title>
               <Paragraph style={styles.answersSubtitle}>
-                Review your answers compared to the correct ones
+                {isWeightageBasedEvaluation(submission) 
+                  ? "Review your answers with weightage breakdown"
+                  : "Review your answers compared to the correct ones"
+                }
               </Paragraph>
             </Card.Content>
             
             {submission.answers.map((answer, index) => {
               console.log(`Answer ${index}:`, answer); // Debug logging
+              
+              // Determine if this is a weightage-based question
+              const hasWeightages = answer.weightageBreakdown && answer.weightageBreakdown.length > 0;
+              const partialScore = answer.partialScore ?? (answer.isCorrect || answer.is_correct ? 1 : 0);
+              const maxPoints = answer.maxPoints ?? 1;
+              
               return (
                 <View key={index}>
                   <List.Item
                     title={`Question ${answer.questionNumber || answer.question_number || index + 1}: ${answer.questionText || 'Question text not available'}`}
-                    description={`Your answer: ${answer.selectedOption || answer.textAnswer || answer.extracted_answer || 'Not detected'} | Correct: ${answer.correctOptions ? (Array.isArray(answer.correctOptions) ? answer.correctOptions.join(', ') : answer.correctOptions) : answer.correct_answer || 'Not available'}`}
+                    description={
+                      <View style={{ marginTop: 4 }}>
+                        <Text style={styles.questionDescription}>
+                          Your answer: {answer.selectedOptions 
+                            ? (Array.isArray(answer.selectedOptions) ? answer.selectedOptions.join(', ') : answer.selectedOptions)
+                            : answer.selectedOption || answer.textAnswer || answer.extracted_answer || 'Not detected'
+                          }
+                        </Text>
+                        <Text style={styles.questionDescription}>
+                          Correct: {answer.correctOptions 
+                            ? (Array.isArray(answer.correctOptions) ? answer.correctOptions.join(', ') : answer.correctOptions)
+                            : answer.correct_answer || 'Not available'
+                          }
+                        </Text>
+                        
+                        {/* Score Display */}
+                        <Text style={[styles.questionDescription, { fontWeight: 'bold', marginTop: 2 }]}>
+                          Score: {partialScore}{maxPoints > 1 ? `/${maxPoints}` : ''}
+                          {maxPoints > 1 && ` (${((partialScore/maxPoints) * 100).toFixed(1)}%)`}
+                        </Text>
+                        
+                        {/* Weightage Breakdown */}
+                        {hasWeightages && (
+                          <View style={styles.weightageDisplay}>
+                            <Text style={styles.weightageText}>
+                              Weightage: {formatWeightageBreakdown(answer.weightageBreakdown || [])}
+                            </Text>
+                          </View>
+                        )}
+                        
+                        {/* Detailed Explanation */}
+                        {answer.details && (
+                          <Text style={[styles.detailsText, { 
+                            color: answer.details.includes('Wrong option') ? '#f44336' : '#666'
+                          }]}>
+                            {answer.details}
+                          </Text>
+                        )}
+                      </View>
+                    }
                     left={() => (
                       <View style={styles.questionIcon}>
                         <Paragraph style={[
                           styles.questionNumber,
                           { 
-                            backgroundColor: (answer.isCorrect || answer.is_correct) ? '#4caf50' : '#f44336',
+                            backgroundColor: partialScore > 0 ? '#4caf50' : '#f44336',
                             color: 'white'
                           }
                         ]}>
@@ -305,26 +473,36 @@ export default function ResultScreen() {
                         </Paragraph>
                       </View>
                     )}
-                  right={() => (
-                    <Chip 
-                      mode="outlined"
-                      compact
-                      textStyle={{ 
-                        color: (answer.isCorrect || answer.is_correct) ? '#4caf50' : '#f44336',
-                        fontSize: 12
-                      }}
-                      style={{ 
-                        borderColor: (answer.isCorrect || answer.is_correct) ? '#4caf50' : '#f44336'
-                      }}
-                    >
-                      {(answer.isCorrect || answer.is_correct) ? 'Correct' : 'Incorrect'}
-                    </Chip>
-                  )}
-                  titleStyle={styles.questionTitle}
-                  descriptionStyle={styles.questionDescription}
-                />
-                {index < submission.answers.length - 1 && <Divider />}
-              </View>
+                    right={() => (
+                      <View style={{ alignItems: 'center' }}>
+                        <Chip 
+                          mode="outlined"
+                          compact
+                          textStyle={{ 
+                            color: partialScore >= maxPoints ? '#4caf50' : 
+                                   partialScore > 0 ? '#ff9800' : '#f44336',
+                            fontSize: 10
+                          }}
+                          style={{ 
+                            borderColor: partialScore >= maxPoints ? '#4caf50' : 
+                                        partialScore > 0 ? '#ff9800' : '#f44336',
+                            marginBottom: 2
+                          }}
+                        >
+                          {partialScore >= maxPoints ? 'Perfect' : 
+                           partialScore > 0 ? 'Partial' : 'Incorrect'}
+                        </Chip>
+                        {hasWeightages && (
+                          <Text style={{ fontSize: 10, color: '#666' }}>
+                            {partialScore}/{maxPoints}
+                          </Text>
+                        )}
+                      </View>
+                    )}
+                    titleStyle={styles.questionTitle}
+                  />
+                  {index < submission.answers.length - 1 && <Divider />}
+                </View>
               );
             })}
           </Card>
@@ -515,5 +693,50 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
+  },
+  
+  // NEW: Styles for weightage-based evaluation display
+  evaluationMethodCard: {
+    borderLeftWidth: 4,
+    marginBottom: 20,
+  },
+  evaluationMethodHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  evaluationDescription: {
+    fontStyle: 'italic',
+    marginBottom: 12,
+    fontSize: 14,
+  },
+  evaluationRules: {
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#2196f3',
+  },
+  evaluationRule: {
+    marginBottom: 6,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  weightageDisplay: {
+    backgroundColor: '#e3f2fd',
+    padding: 8,
+    borderRadius: 6,
+    marginTop: 6,
+  },
+  weightageText: {
+    fontSize: 12,
+    color: '#1976d2',
+    fontFamily: 'monospace',
+  },
+  detailsText: {
+    fontSize: 11,
+    fontStyle: 'italic',
+    marginTop: 4,
   },
 });

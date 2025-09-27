@@ -29,6 +29,15 @@ interface Answer {
   is_correct: boolean;
   question_text: string;
   correct_option: string;
+  
+  // NEW: Support for weightage-based evaluation
+  questionNumber?: number;
+  selectedOptions?: any;
+  correctOptions?: any;
+  partialScore?: number;
+  maxPoints?: number;
+  details?: string;
+  weightageBreakdown?: Array<{ option: string; weight: number }>;
 }
 
 interface SubmissionDetail {
@@ -124,19 +133,79 @@ export default function SubmissionDetailScreen() {
     }
   };
 
+  // NEW: Helper functions for weightage-based evaluation
+  const isWeightageBasedAnswer = (answer: Answer): boolean => {
+    return !!(answer.weightageBreakdown && answer.weightageBreakdown.length > 0);
+  };
+
+  const isWeightageBasedSubmission = (): boolean => {
+    return submission?.answers?.some(answer => isWeightageBasedAnswer(answer)) || false;
+  };
+
+  const formatWeightageBreakdown = (breakdown: Array<{ option: string; weight: number }>): string => {
+    if (!breakdown || breakdown.length === 0) return '';
+    return breakdown.map(item => `${item.option}(${item.weight})`).join(' + ');
+  };
+
+  const getAnswerScoreStatus = (answer: Answer): { status: 'perfect' | 'partial' | 'zero' | 'incorrect'; score: number; maxScore: number } => {
+    if (isWeightageBasedAnswer(answer)) {
+      const score = answer.partialScore || 0;
+      const maxScore = answer.maxPoints || 1;
+      
+      if (score >= maxScore) return { status: 'perfect', score, maxScore };
+      if (score > 0) return { status: 'partial', score, maxScore };
+      return { status: 'zero', score, maxScore };
+    } else {
+      // Traditional evaluation
+      return {
+        status: answer.is_correct ? 'perfect' : 'incorrect',
+        score: answer.is_correct ? 1 : 0,
+        maxScore: 1
+      };
+    }
+  };
+
   const renderAnswer = (answer: Answer, index: number) => {
-    const isCorrect = answer.is_correct;
-    const hasTextAnswer = answer.text_answer || answer.blank_answers;
+    const isWeightageAnswer = isWeightageBasedAnswer(answer);
+    const scoreStatus = getAnswerScoreStatus(answer);
+    
+    // Determine colors based on score status
+    let statusColor: string;
+    let statusIcon: string;
+    let statusBg: string;
+    
+    switch (scoreStatus.status) {
+      case 'perfect':
+        statusColor = '#22C55E'; // Green
+        statusIcon = 'checkmark-circle';
+        statusBg = 'rgba(34, 197, 94, 0.1)';
+        break;
+      case 'partial':
+        statusColor = '#F59E0B'; // Orange
+        statusIcon = 'checkmark-circle-outline';
+        statusBg = 'rgba(245, 158, 11, 0.1)';
+        break;
+      case 'zero':
+        statusColor = '#DC2626'; // Red
+        statusIcon = 'close-circle';
+        statusBg = 'rgba(220, 38, 38, 0.1)';
+        break;
+      case 'incorrect':
+        statusColor = '#EF4444'; // Red  
+        statusIcon = 'close-circle';
+        statusBg = 'rgba(239, 68, 68, 0.1)';
+        break;
+    }
     
     return (
       <Card
-        key={answer.question_number}
+        key={answer.question_number || answer.questionNumber}
         style={[
           styles.answerCard,
           {
             backgroundColor: theme.colors.surface,
             borderLeftWidth: 4,
-            borderLeftColor: isCorrect ? "#22C55E" : "#EF4444",
+            borderLeftColor: statusColor,
           },
         ]}
       >
@@ -147,29 +216,36 @@ export default function SubmissionDetailScreen() {
               <View
                 style={[
                   styles.questionNumberBadge,
-                  {
-                    backgroundColor: isCorrect
-                      ? "rgba(34, 197, 94, 0.1)"
-                      : "rgba(239, 68, 68, 0.1)",
-                  },
+                  { backgroundColor: statusBg },
                 ]}
               >
                 <Text
                   variant="labelMedium"
                   style={[
                     styles.questionNumber,
-                    { color: isCorrect ? "#22C55E" : "#EF4444" },
+                    { color: statusColor },
                   ]}
                 >
-                  Q{answer.question_number}
+                  Q{answer.question_number || answer.questionNumber}
                 </Text>
               </View>
               <Ionicons
-                name={isCorrect ? "checkmark-circle" : "close-circle"}
+                name={statusIcon as any}
                 size={20}
-                color={isCorrect ? "#22C55E" : "#EF4444"}
+                color={statusColor}
                 style={styles.statusIcon}
               />
+              {/* Score Badge for Weightage Questions */}
+              {isWeightageAnswer && (
+                <View style={[styles.scoreBadge, { backgroundColor: statusBg }]}>
+                  <Text
+                    variant="labelSmall"
+                    style={{ color: statusColor, fontWeight: 'bold' }}
+                  >
+                    {scoreStatus.score}/{scoreStatus.maxScore}
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
 
@@ -190,8 +266,8 @@ export default function SubmissionDetailScreen() {
 
           {/* Answer Details */}
           <View style={styles.answerDetails}>
-            {/* Multiple Choice Answer */}
-            {answer.selected_option !== null && (
+            {/* Student Answer - Multiple Choice */}
+            {(answer.selected_option !== null || answer.selectedOptions) && (
               <View style={styles.answerRow}>
                 <Text
                   variant="bodySmall"
@@ -202,26 +278,26 @@ export default function SubmissionDetailScreen() {
                 <View
                   style={[
                     styles.optionChip,
-                    {
-                      backgroundColor: isCorrect
-                        ? "rgba(34, 197, 94, 0.1)"
-                        : "rgba(239, 68, 68, 0.1)",
-                    },
+                    { backgroundColor: statusBg },
                   ]}
                 >
                   <Text
                     variant="labelMedium"
                     style={[
                       styles.optionText,
-                      { color: isCorrect ? "#22C55E" : "#EF4444" },
+                      { color: statusColor },
                     ]}
                   >
-                    {answer.selected_option || "No Answer"}
+                    {answer.selectedOptions 
+                      ? (Array.isArray(answer.selectedOptions) 
+                          ? answer.selectedOptions.join(', ')
+                          : answer.selectedOptions)
+                      : answer.selected_option || "No Answer"
+                    }
                   </Text>
                 </View>
               </View>
             )}
-
 
             {/* Correct Answer */}
             <View style={styles.answerRow}>
@@ -241,10 +317,72 @@ export default function SubmissionDetailScreen() {
                   variant="labelMedium"
                   style={[styles.correctAnswerText, { color: "#22C55E" }]}
                 >
-                  {answer.correct_option}
+                  {answer.correctOptions 
+                    ? (Array.isArray(answer.correctOptions) 
+                        ? answer.correctOptions.join(', ')
+                        : answer.correctOptions)
+                    : answer.correct_option
+                  }
                 </Text>
               </View>
             </View>
+
+            {/* Weightage Information */}
+            {isWeightageAnswer && answer.weightageBreakdown && (
+              <View style={styles.weightageSection}>
+                <Text
+                  variant="bodySmall"
+                  style={[styles.answerLabel, { color: theme.colors.onSurfaceVariant }]}
+                >
+                  Weightage Breakdown:
+                </Text>
+                <View style={styles.weightageContainer}>
+                  <Text
+                    variant="labelMedium"
+                    style={[styles.weightageText, { color: '#1976d2' }]}
+                  >
+                    {formatWeightageBreakdown(answer.weightageBreakdown)}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* Detailed Explanation */}
+            {answer.details && (
+              <View style={styles.explanationSection}>
+                <Text
+                  variant="bodySmall"
+                  style={[styles.answerLabel, { color: theme.colors.onSurfaceVariant }]}
+                >
+                  Explanation:
+                </Text>
+                <Text
+                  variant="bodySmall"
+                  style={[
+                    styles.explanationText,
+                    { 
+                      color: answer.details.includes('Wrong option') ? '#DC2626' : theme.colors.onSurface,
+                      fontStyle: 'italic'
+                    }
+                  ]}
+                >
+                  {answer.details}
+                </Text>
+              </View>
+            )}
+
+            {/* Special Alert for Zero Marks due to Wrong Options */}
+            {scoreStatus.status === 'zero' && answer.details?.includes('Wrong option') && (
+              <View style={styles.zeroMarksAlert}>
+                <Ionicons name="warning" size={16} color="#DC2626" />
+                <Text
+                  variant="bodySmall"
+                  style={{ color: '#DC2626', marginLeft: 6, fontWeight: 'bold' }}
+                >
+                  Zero marks: Wrong option selected (No partial credit in weightage-based evaluation)
+                </Text>
+              </View>
+            )}
           </View>
         </View>
       </Card>
@@ -394,7 +532,20 @@ export default function SubmissionDetailScreen() {
               ]}
             >
               Answer Details ({submission.answers.length} Questions)
+              {isWeightageBasedSubmission() && (
+                <Text style={{ color: '#2196f3', fontSize: 14 }}> • Weightage-Based</Text>
+              )}
             </Text>
+
+            {/* Weightage-based evaluation info */}
+            {isWeightageBasedSubmission() && (
+              <View style={styles.weightageInfoBanner}>
+                <Ionicons name="information-circle" size={16} color="#2196f3" />
+                <Text style={styles.weightageInfoText}>
+                  This test uses weightage-based scoring. Wrong options result in zero marks.
+                </Text>
+              </View>
+            )}
 
             {submission.answers
               .sort((a, b) => a.question_number - b.question_number)
@@ -621,5 +772,59 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 40,
+  },
+  
+  // NEW: Styles for weightage-based evaluation
+  weightageSection: {
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  weightageContainer: {
+    backgroundColor: '#e3f2fd',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  weightageText: {
+    fontFamily: 'monospace',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  explanationSection: {
+    marginTop: 12,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.1)',
+  },
+  explanationText: {
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  zeroMarksAlert: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(220, 38, 38, 0.1)',
+    padding: 8,
+    borderRadius: 6,
+    marginTop: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#DC2626',
+  },
+  weightageInfoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(33, 150, 243, 0.1)',
+    padding: 12,
+    borderRadius: 8,
+    marginVertical: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#2196f3',
+  },
+  weightageInfoText: {
+    marginLeft: 8,
+    color: '#1976d2',
+    fontSize: 13,
+    fontStyle: 'italic',
   },
 });

@@ -197,6 +197,8 @@ export default function TestSubmissionsScreen() {
         return "create-outline";
       case "gemini_vision":
         return "eye-outline";
+      case "manual_test":
+        return "calculator-outline"; // Weightage-based evaluation
       default:
         return "document-text-outline";
     }
@@ -210,8 +212,31 @@ export default function TestSubmissionsScreen() {
         return "Fill Blanks";
       case "gemini_vision":
         return "AI Vision";
+      case "manual_test":
+        return "Weightage"; // Clear indicator for weightage-based tests
       default:
         return "Traditional";
+    }
+  };
+
+  // NEW: Helper to detect if this is a weightage-based test
+  const isWeightageBasedTest = (): boolean => {
+    return submissions.some(sub => sub.evaluation_method === "manual_test");
+  };
+
+  // NEW: Get evaluation method color for better distinction
+  const getEvaluationMethodColor = (method: string): string => {
+    switch (method) {
+      case "manual_test":
+        return "#2196F3"; // Blue for weightage-based
+      case "omr_detection":
+        return "#4CAF50"; // Green for OMR
+      case "fill_blanks_ai":
+        return "#FF9800"; // Orange for AI
+      case "gemini_vision":
+        return "#9C27B0"; // Purple for Vision AI
+      default:
+        return "#757575"; // Gray for traditional
     }
   };
 
@@ -238,32 +263,56 @@ export default function TestSubmissionsScreen() {
     const passRate = totalStudents > 0 
       ? (submissions.filter(sub => safePercentage(sub.percentage) >= 50).length / totalStudents) * 100
       : 0;
+    
+    // NEW: Weightage-based test specific stats
+    const weightageSubmissions = submissions.filter(sub => sub.evaluation_method === "manual_test");
+    const hasWeightageTests = weightageSubmissions.length > 0;
+    
+    const excellentRate = totalStudents > 0 
+      ? (submissions.filter(sub => safePercentage(sub.percentage) >= 80).length / totalStudents) * 100
+      : 0;
 
     return (
-      <View style={styles.statsContainer}>
-        <View style={[styles.statCard, { backgroundColor: theme.colors.surface }]}>
-          <Text variant="titleLarge" style={[styles.statNumber, { color: theme.colors.onSurface }]}>
-            {totalStudents}
-          </Text>
-          <Text variant="bodySmall" style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>
-            Total Students
-          </Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: theme.colors.surface }]}>
-          <Text variant="titleLarge" style={[styles.statNumber, { color: theme.colors.onSurface }]}>
-            {averageScore.toFixed(1)}%
-          </Text>
-          <Text variant="bodySmall" style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>
-            Average Score
-          </Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: theme.colors.surface }]}>
-          <Text variant="titleLarge" style={[styles.statNumber, { color: theme.colors.onSurface }]}>
-            {passRate.toFixed(1)}%
-          </Text>
-          <Text variant="bodySmall" style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>
-            Pass Rate
-          </Text>
+      <View>
+        {hasWeightageTests && (
+          <View style={[styles.weightageTestBanner, { backgroundColor: 'rgba(33, 150, 243, 0.1)' }]}>
+            <Ionicons name="information-circle" size={20} color="#2196F3" />
+            <View style={styles.bannerTextContainer}>
+              <Text style={[styles.bannerTitle, { color: '#1976D2' }]}>
+                Weightage-Based Evaluation
+              </Text>
+              <Text style={[styles.bannerSubtitle, { color: '#1976D2' }]}>
+                {weightageSubmissions.length}/{totalStudents} submissions use advanced scoring
+              </Text>
+            </View>
+          </View>
+        )}
+        
+        <View style={styles.statsContainer}>
+          <View style={[styles.statCard, { backgroundColor: theme.colors.surface }]}>
+            <Text variant="titleLarge" style={[styles.statNumber, { color: theme.colors.onSurface }]}>
+              {totalStudents}
+            </Text>
+            <Text variant="bodySmall" style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>
+              Total Students
+            </Text>
+          </View>
+          <View style={[styles.statCard, { backgroundColor: theme.colors.surface }]}>
+            <Text variant="titleLarge" style={[styles.statNumber, { color: theme.colors.onSurface }]}>
+              {averageScore.toFixed(1)}%
+            </Text>
+            <Text variant="bodySmall" style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>
+              Average Score
+            </Text>
+          </View>
+          <View style={[styles.statCard, { backgroundColor: theme.colors.surface }]}>
+            <Text variant="titleLarge" style={[styles.statNumber, { color: theme.colors.onSurface }]}>
+              {hasWeightageTests ? excellentRate.toFixed(1) : passRate.toFixed(1)}%
+            </Text>
+            <Text variant="bodySmall" style={[styles.statLabel, { color: theme.colors.onSurfaceVariant }]}>
+              {hasWeightageTests ? 'Excellence Rate (80%+)' : 'Pass Rate (50%+)'}
+            </Text>
+          </View>
         </View>
       </View>
     );
@@ -379,17 +428,30 @@ export default function TestSubmissionsScreen() {
           <Chip
             mode="outlined"
             compact
-            style={[styles.methodChip, { backgroundColor: isDarkMode ? "#374151" : "#F3F4F6" }]}
-            textStyle={{ fontSize: 10 }}
+            style={[
+              styles.methodChip, 
+              { 
+                backgroundColor: item.evaluation_method === "manual_test" 
+                  ? 'rgba(33, 150, 243, 0.1)' 
+                  : (isDarkMode ? "#374151" : "#F3F4F6"),
+                borderColor: item.evaluation_method === "manual_test" ? '#2196F3' : 'transparent'
+              }
+            ]}
+            textStyle={{ 
+              fontSize: 10,
+              color: item.evaluation_method === "manual_test" ? '#2196F3' : theme.colors.onSurfaceVariant,
+              fontWeight: item.evaluation_method === "manual_test" ? 'bold' : 'normal'
+            }}
             icon={() => (
               <Ionicons
                 name={getEvaluationMethodIcon(item.evaluation_method) as any}
                 size={12}
-                color={theme.colors.onSurfaceVariant}
+                color={item.evaluation_method === "manual_test" ? '#2196F3' : theme.colors.onSurfaceVariant}
               />
             )}
           >
             {getEvaluationMethodLabel(item.evaluation_method)}
+            {item.evaluation_method === "manual_test" && " ⚡"}
           </Chip>
           
           <Ionicons
@@ -468,11 +530,27 @@ export default function TestSubmissionsScreen() {
             <PerformanceChart />
             {submissions.length > 0 && (
               <View style={styles.listHeader}>
-                <Text variant="titleMedium" style={[styles.listTitle, { color: theme.colors.onSurface }]}>
-                  Student Results ({submissions.length})
-                </Text>
+                <View style={styles.listTitleContainer}>
+                  <Text variant="titleMedium" style={[styles.listTitle, { color: theme.colors.onSurface }]}>
+                    Student Results ({submissions.length})
+                  </Text>
+                  {isWeightageBasedTest() && (
+                    <Chip 
+                      mode="outlined" 
+                      compact
+                      style={[styles.weightageIndicator, { borderColor: '#2196F3' }]}
+                      textStyle={{ color: '#2196F3', fontSize: 10, fontWeight: 'bold' }}
+                      icon={() => <Ionicons name="calculator-outline" size={12} color="#2196F3" />}
+                    >
+                      WEIGHTAGE-BASED
+                    </Chip>
+                  )}
+                </View>
                 <Text variant="bodySmall" style={[styles.listSubtitle, { color: theme.colors.onSurfaceVariant }]}>
-                  Tap to view detailed results
+                  {isWeightageBasedTest() 
+                    ? "This test uses advanced weightage-based scoring • Tap to view detailed results"
+                    : "Tap to view detailed results"
+                  }
                 </Text>
               </View>
             )}
@@ -698,5 +776,42 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: "center",
     lineHeight: 20,
+  },
+  
+  // NEW: Styles for evaluation method indicators
+  listTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  weightageIndicator: {
+    backgroundColor: 'rgba(33, 150, 243, 0.1)',
+    borderWidth: 1,
+    height: 24,
+  },
+  
+  // NEW: Banner styles for weightage-based test info
+  weightageTestBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    margin: 16,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#2196F3',
+  },
+  bannerTextContainer: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  bannerTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  bannerSubtitle: {
+    fontSize: 12,
+    opacity: 0.8,
   },
 });
