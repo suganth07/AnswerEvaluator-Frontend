@@ -44,13 +44,14 @@ export default function ManualQuestionEditorScreen() {
     questionText: `Question ${currentQuestionNumber}`, // Auto-generated
     isMultipleChoice: true,
     options: [
-      { id: "A", text: "", isCorrect: true, weight: 1 },
+      { id: "A", text: "A", isCorrect: true, weight: 1 },
     ],
     totalMarks: 1,
     singleCorrectAnswer: "",
   });
 
   const [allQuestions, setAllQuestions] = useState<Question[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const { theme, isDarkMode } = useTheme();
 
   useEffect(() => {
@@ -74,12 +75,16 @@ export default function ManualQuestionEditorScreen() {
     const currentCorrectOptions = question.options.filter(opt => opt.isCorrect);
     const defaultWeight = currentCorrectOptions.length === 0 ? question.totalMarks : 0;
     
+    const newOption = { 
+      id: newOptionId, 
+      text: newOptionId, // Default to the option letter
+      isCorrect: true, 
+      weight: defaultWeight 
+    };
+    
     setQuestion(prev => ({
       ...prev,
-      options: [
-        ...prev.options,
-        { id: newOptionId, text: "", isCorrect: true, weight: defaultWeight }
-      ]
+      options: [...prev.options, newOption]
     }));
   };
 
@@ -90,22 +95,23 @@ export default function ManualQuestionEditorScreen() {
       return;
     }
     
-    setQuestion(prev => ({
-      ...prev,
-      options: prev.options
-        .filter(opt => opt.id !== optionId)
-        .map((opt, index) => ({
+    setQuestion(prev => {
+      const filteredOptions = prev.options.filter(opt => opt.id !== optionId);
+      return {
+        ...prev,
+        options: filteredOptions.map((opt, index) => ({
           ...opt,
           id: String.fromCharCode(65 + index) // Reassign A, B, C...
         }))
-    }));
+      };
+    });
   };
 
   const updateOption = (optionId: string, field: keyof Option, value: any) => {
     setQuestion(prev => ({
       ...prev,
       options: prev.options.map(opt =>
-        opt.id === optionId ? { ...opt, [field]: value } : opt
+        opt.id === optionId ? { ...opt, [field]: value } : { ...opt }
       )
     }));
   };
@@ -113,7 +119,7 @@ export default function ManualQuestionEditorScreen() {
   const toggleCorrectAnswer = (optionId: string) => {
     setQuestion(prev => {
       const updatedOptions = prev.options.map(opt => 
-        opt.id === optionId ? { ...opt, isCorrect: !opt.isCorrect } : opt
+        opt.id === optionId ? { ...opt, isCorrect: !opt.isCorrect } : { ...opt }
       );
       
       // Auto-adjust weights for single correct answer
@@ -121,7 +127,7 @@ export default function ManualQuestionEditorScreen() {
       if (correctOptions.length === 1) {
         // Single correct answer: set weight to total marks
         const finalOptions = updatedOptions.map(opt => 
-          opt.isCorrect ? { ...opt, weight: prev.totalMarks } : opt
+          opt.isCorrect ? { ...opt, weight: prev.totalMarks } : { ...opt }
         );
         return { ...prev, options: finalOptions };
       }
@@ -131,10 +137,30 @@ export default function ManualQuestionEditorScreen() {
   };
 
   const calculateTotalWeight = () => {
+    if (!question.options) return 0;
+    
     const total = question.options
-      .filter(opt => opt.isCorrect)
-      .reduce((sum, opt) => sum + opt.weight, 0);
+      .filter(opt => opt && opt.isCorrect)
+      .reduce((sum, opt) => sum + (opt.weight || 0), 0);
     return Math.round(total * 100) / 100; // Round to 2 decimal places
+  };
+
+  const autoDistributeMarks = () => {
+    if (!question.options) return;
+    
+    const correctOptions = question.options.filter(opt => opt && opt.isCorrect);
+    if (correctOptions.length === 0) return;
+    
+    // Calculate equal distribution
+    const marksPerOption = Math.round((question.totalMarks / correctOptions.length) * 100) / 100;
+    
+    // Update all correct options with distributed marks
+    setQuestion(prev => ({
+      ...prev,
+      options: prev.options.map(opt => 
+        opt.isCorrect ? { ...opt, weight: marksPerOption } : { ...opt }
+      )
+    }));
   };
 
   const validateQuestion = () => {
@@ -144,14 +170,19 @@ export default function ManualQuestionEditorScreen() {
     }
 
     if (question.isMultipleChoice) {
-      const correctOptions = question.options.filter(opt => opt.isCorrect);
+      if (!question.options || !Array.isArray(question.options)) {
+        Alert.alert("Error", "Invalid options data");
+        return false;
+      }
+      
+      const correctOptions = question.options.filter(opt => opt && opt.isCorrect);
       
       if (correctOptions.length === 0) {
         Alert.alert("Error", "Please add at least one correct option");
         return false;
       }
 
-      const hasEmptyOptions = correctOptions.some(opt => !opt.text.trim());
+      const hasEmptyOptions = correctOptions.some(opt => !opt.text || !opt.text.trim());
       if (hasEmptyOptions) {
         Alert.alert("Error", "Please fill in all correct option texts");
         return false;
@@ -215,6 +246,7 @@ export default function ManualQuestionEditorScreen() {
 
   const saveTest = async (questions: Question[]) => {
     try {
+      setIsLoading(true);
       console.log('🔄 Saving manual test...');
       
       const testData = {
@@ -254,8 +286,10 @@ export default function ManualQuestionEditorScreen() {
       console.error('❌ Error saving test:', error);
       Alert.alert(
         "Error", 
-        error.response?.data?.error || "Failed to save test. Please try again."
+        error.response?.data?.error || error.message || "Failed to save test. Please try again."
       );
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -510,7 +544,21 @@ export default function ManualQuestionEditorScreen() {
                       // Allow decimal input
                       const marks = parseFloat(text);
                       if (!isNaN(marks) && marks >= 0) {
-                        setQuestion(prev => ({ ...prev, totalMarks: marks }));
+                        setQuestion(prev => {
+                          const newState = { ...prev, totalMarks: marks };
+                          
+                          // Auto-adjust single correct answer weight
+                          if (prev.isMultipleChoice && prev.options) {
+                            const correctOptions = prev.options.filter(opt => opt && opt.isCorrect);
+                            if (correctOptions.length === 1) {
+                              newState.options = prev.options.map(opt => 
+                                opt.isCorrect ? { ...opt, weight: marks } : { ...opt }
+                              );
+                            }
+                          }
+                          
+                          return newState;
+                        });
                       }
                     }}
                     keyboardType="numeric"
@@ -554,6 +602,15 @@ export default function ManualQuestionEditorScreen() {
                     Correct Options
                   </Text>
                   <View style={styles.headerRight}>
+                    <TouchableOpacity
+                      style={[styles.autoDistributeButton, { backgroundColor: theme.colors.primary + "20", borderColor: theme.colors.primary }]}
+                      onPress={autoDistributeMarks}
+                    >
+                      <Ionicons name="shuffle-outline" size={14} color={theme.colors.primary} />
+                      <Text style={[styles.autoDistributeText, { color: theme.colors.primary }]}>
+                        Auto Distribute
+                      </Text>
+                    </TouchableOpacity>
                     <Chip
                       mode="outlined"
                       compact
@@ -567,11 +624,12 @@ export default function ManualQuestionEditorScreen() {
                 
                 <Text variant="bodyMedium" style={[styles.sectionDescription, { color: theme.colors.onSurfaceVariant }]}>
                   Enter only the correct options for this question with their weightages.
+                  Use "Auto Distribute" to evenly distribute marks among all correct options.
                 </Text>
 
                 {/* Display existing correct options */}
-                {question.options.filter(opt => opt.isCorrect).map((option, index) => (
-                  <View key={option.id} style={[styles.correctOptionContainer, { backgroundColor: theme.colors.primary + "10" }]}>
+                {question.options && question.options.filter(opt => opt && opt.isCorrect).map((option, index) => (
+                  <View key={`${option.id}-${index}`} style={[styles.correctOptionContainer, { backgroundColor: theme.colors.primary + "10" }]}>
                     <View style={styles.correctOptionHeader}>
                       <View style={styles.correctOptionBadge}>
                         <Ionicons name="checkmark-circle" size={16} color={theme.colors.primary} />
@@ -579,7 +637,7 @@ export default function ManualQuestionEditorScreen() {
                           Correct Option {index + 1}
                         </Text>
                       </View>
-                      {question.options.filter(opt => opt.isCorrect).length > 1 && (
+                      {question.options.filter(opt => opt && opt.isCorrect).length > 1 && (
                         <TouchableOpacity
                           style={styles.removeCorrectOption}
                           onPress={() => removeOption(option.id)}
@@ -604,25 +662,10 @@ export default function ManualQuestionEditorScreen() {
                             borderWidth: 2,
                           },
                         ]}
-                        value={option.text}
+                        value={option.text || ""}
                         onChangeText={(text) => {
-                          // Clean the input text
-                          const cleanText = text.trim().toUpperCase();
-                          
-                          // For single character answers (A, B, C, D), update both the option ID and text
-                          if (cleanText.length === 1 && /^[A-Z]$/.test(cleanText)) {
-                            setQuestion(prev => ({
-                              ...prev,
-                              options: prev.options.map(opt => 
-                                opt.id === option.id 
-                                  ? { ...opt, id: cleanText, text: cleanText }
-                                  : opt
-                              )
-                            }));
-                          } else {
-                            // For longer text or empty, just update the text but keep original ID
-                            updateOption(option.id, "text", text);
-                          }
+                          // Directly update the option text without any complex logic
+                          updateOption(option.id, "text", text);
                         }}
                         placeholder="Enter A, B, C, D or full answer text"
                         placeholderTextColor={theme.colors.onSurfaceVariant}
@@ -645,24 +688,21 @@ export default function ManualQuestionEditorScreen() {
                             borderWidth: 2,
                           },
                         ]}
-                        value={option.weight.toString()}
+                        value={option.weight?.toString() || "0"}
                         onChangeText={(text) => {
-                          // Allow empty input for better UX
+                          // Handle weight input more carefully
                           if (text === '') {
                             updateOption(option.id, "weight", 0);
                             return;
                           }
                           
-                          // Allow decimal input including starting with dot
-                          // Also allow intermediate states like "0." while typing
-                          if (text === '.' || text.match(/^\d*\.?\d*$/)) {
-                            const weight = parseFloat(text);
-                            if (!isNaN(weight) && weight >= 0) {
-                              updateOption(option.id, "weight", weight);
-                            } else if (text === '.' || text.endsWith('.')) {
-                              // Allow typing decimal point for better UX
-                              updateOption(option.id, "weight", parseFloat(text) || 0);
-                            }
+                          // Allow decimal numbers
+                          const numericValue = parseFloat(text);
+                          if (!isNaN(numericValue) && numericValue >= 0) {
+                            updateOption(option.id, "weight", numericValue);
+                          } else if (text.match(/^\d*\.?\d*$/)) {
+                            // Allow typing decimal points and partial numbers
+                            updateOption(option.id, "weight", parseFloat(text) || 0);
                           }
                         }}
                         keyboardType="decimal-pad"
@@ -685,7 +725,7 @@ export default function ManualQuestionEditorScreen() {
                 </TouchableOpacity>
 
                 {/* Weightage Validation Summary */}
-                {question.options.filter(opt => opt.isCorrect).length > 0 && (
+                {question.options && question.options.filter(opt => opt && opt.isCorrect).length > 0 && (
                   <View style={[styles.weightValidationContainer, { 
                     backgroundColor: Math.abs(calculateTotalWeight() - question.totalMarks) <= 0.01 ? theme.colors.primary + "10" : "#FEF2F2",
                     borderColor: Math.abs(calculateTotalWeight() - question.totalMarks) <= 0.01 ? theme.colors.primary : "#F87171"
@@ -718,10 +758,10 @@ export default function ManualQuestionEditorScreen() {
             style={[
               styles.navButton,
               styles.previousButton,
-              { opacity: currentQuestionNumber > 1 ? 1 : 0.5 },
+              { opacity: currentQuestionNumber > 1 && !isLoading ? 1 : 0.5 },
             ]}
             onPress={goToPrevious}
-            disabled={currentQuestionNumber <= 1}
+            disabled={currentQuestionNumber <= 1 || isLoading}
           >
             <Ionicons name="arrow-back" size={20} color={theme.colors.onSurface} />
             <Text style={[styles.navButtonText, { color: theme.colors.onSurface }]}>
@@ -730,8 +770,9 @@ export default function ManualQuestionEditorScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.nextButton}
+            style={[styles.nextButton, { opacity: isLoading ? 0.7 : 1 }]}
             onPress={saveAndNext}
+            disabled={isLoading}
           >
             <LinearGradient
               colors={["#6366F1", "#8B5CF6"]}
@@ -739,14 +780,26 @@ export default function ManualQuestionEditorScreen() {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
-              <Text style={styles.nextButtonText}>
-                {currentQuestionNumber === totalQuestions ? "Finish Test" : "Save & Next"}
-              </Text>
-              <Ionicons 
-                name={currentQuestionNumber === totalQuestions ? "checkmark" : "arrow-forward"} 
-                size={20} 
-                color="white" 
-              />
+              {isLoading ? (
+                <>
+                  <View style={styles.loadingSpinner}>
+                    <Text style={[styles.nextButtonText, { marginRight: 8 }]}>
+                      {currentQuestionNumber === totalQuestions ? "Creating Test..." : "Saving..."}
+                    </Text>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.nextButtonText}>
+                    {currentQuestionNumber === totalQuestions ? "Finish Test" : "Save & Next"}
+                  </Text>
+                  <Ionicons 
+                    name={currentQuestionNumber === totalQuestions ? "checkmark" : "arrow-forward"} 
+                    size={20} 
+                    color="white" 
+                  />
+                </>
+              )}
             </LinearGradient>
           </TouchableOpacity>
         </View>
@@ -1077,5 +1130,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
     flex: 1,
+  },
+  loadingSpinner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  autoDistributeButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginRight: 8,
+    gap: 4,
+  },
+  autoDistributeText: {
+    fontSize: 11,
+    fontWeight: "500",
   },
 });
