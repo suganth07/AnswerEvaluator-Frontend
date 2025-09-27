@@ -217,9 +217,14 @@ export default function ResultScreen() {
             <View style={styles.scoreHeader}>
               <View style={styles.scoreMain}>
                 <Title style={[styles.scoreTitle, { color: getScoreColor(submission.percentage) }]}>
-                  {submission.score}/{submission.total_questions}
+                  {submission.maxPossibleScore ? 
+                    `${submission.score}/${submission.maxPossibleScore}` : 
+                    `${submission.score}/${submission.total_questions}`
+                  }
                 </Title>
-                <Paragraph style={[styles.scoreSubtitle, { color: theme.colors.onSurfaceVariant }]}>Questions Correct</Paragraph>
+                <Paragraph style={[styles.scoreSubtitle, { color: theme.colors.onSurfaceVariant }]}>
+                  {submission.maxPossibleScore ? 'Marks Scored' : 'Questions Correct'}
+                </Paragraph>
               </View>
               <View style={styles.gradeContainer}>
                 <Title style={[styles.gradeText, { color: getScoreColor(submission.percentage) }]}>
@@ -245,39 +250,6 @@ export default function ResultScreen() {
             </View>
           </Card.Content>
         </Card>
-
-        {/* Evaluation Method Information */}
-        {isWeightageBasedEvaluation(submission) && (
-          <Card style={[styles.card, styles.evaluationMethodCard, { backgroundColor: theme.colors.surface, borderColor: '#2196f3' }]}>
-            <Card.Content>
-              <View style={styles.evaluationMethodHeader}>
-                <Title style={[styles.cardTitle, { color: '#2196f3' }]}>🎯 {getEvaluationMethodName(submission)}</Title>
-                <Chip 
-                  mode="outlined" 
-                  compact
-                  textStyle={{ color: '#2196f3', fontSize: 10 }}
-                  style={{ borderColor: '#2196f3', height: 24 }}
-                >
-                  Advanced
-                </Chip>
-              </View>
-              <Paragraph style={[styles.evaluationDescription, { color: theme.colors.onSurfaceVariant }]}>
-                This test uses weightage-based scoring where different correct options carry different point values.
-              </Paragraph>
-              <View style={styles.evaluationRules}>
-                <Paragraph style={[styles.evaluationRule, { color: theme.colors.onSurfaceVariant }]}>
-                  ✅ <Text style={{ fontWeight: 'bold' }}>Only correct options:</Text> Sum of their weightages
-                </Paragraph>
-                <Paragraph style={[styles.evaluationRule, { color: theme.colors.onSurfaceVariant }]}>
-                  ❌ <Text style={{ fontWeight: 'bold' }}>Any wrong option:</Text> Zero marks (no partial credit)
-                </Paragraph>
-                <Paragraph style={[styles.evaluationRule, { color: theme.colors.onSurfaceVariant }]}>
-                  🎯 <Text style={{ fontWeight: 'bold' }}>All correct options:</Text> Full marks for that question
-                </Paragraph>
-              </View>
-            </Card.Content>
-          </Card>
-        )}
 
         {/* Student Information */}
         <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>

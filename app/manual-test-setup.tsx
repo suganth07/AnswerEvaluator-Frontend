@@ -16,6 +16,7 @@ import { LinearGradient } from "expo-linear-gradient";
 
 export default function ManualTestSetupScreen() {
   const [testName, setTestName] = useState("");
+  const [totalMarks, setTotalMarks] = useState("");
   const [numQuestions, setNumQuestions] = useState("");
   const [selectedPreset, setSelectedPreset] = useState<number | null>(null);
   const { theme, isDarkMode } = useTheme();
@@ -23,6 +24,17 @@ export default function ManualTestSetupScreen() {
   const handleContinue = () => {
     if (!testName.trim()) {
       Alert.alert("Error", "Please enter a test name");
+      return;
+    }
+
+    if (!totalMarks.trim()) {
+      Alert.alert("Error", "Please enter total marks for the test");
+      return;
+    }
+
+    const totalMarksNum = parseInt(totalMarks);
+    if (!totalMarksNum || totalMarksNum < 1 || totalMarksNum > 10000) {
+      Alert.alert("Error", "Please enter valid total marks (1-10000)");
       return;
     }
 
@@ -37,6 +49,7 @@ export default function ManualTestSetupScreen() {
       pathname: "/manual-question-editor",
       params: {
         testName: testName.trim(),
+        totalMarks: totalMarksNum.toString(),
         totalQuestions: questionCount.toString(),
         currentQuestion: "1",
       },
@@ -138,6 +151,35 @@ export default function ManualTestSetupScreen() {
                     maxLength={100}
                   />
                 </View>
+                
+                {/* Total Marks */}
+                <View style={styles.inputContainer}>
+                  <Text
+                    variant="labelLarge"
+                    style={[
+                      styles.inputLabel,
+                      { color: theme.colors.onSurface },
+                    ]}
+                  >
+                    Total Marks *
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.textInput,
+                      {
+                        backgroundColor: isDarkMode ? "#374151" : "#F9FAFB",
+                        color: theme.colors.onSurface,
+                        borderColor: theme.colors.outline,
+                      },
+                    ]}
+                    value={totalMarks}
+                    onChangeText={setTotalMarks}
+                    placeholder="e.g., 100"
+                    placeholderTextColor={theme.colors.onSurfaceVariant}
+                    keyboardType="numeric"
+                    maxLength={4}
+                  />
+                </View>
               </View>
             </Card>
 
@@ -209,7 +251,7 @@ export default function ManualTestSetupScreen() {
             </Card>
 
             {/* Summary Section */}
-            {(selectedPreset || numQuestions) && testName && (
+            {(selectedPreset || numQuestions) && testName && totalMarks && (
               <Card
                 style={[
                   styles.card,
@@ -303,11 +345,11 @@ export default function ManualTestSetupScreen() {
                 styles.continueButton,
                 {
                   opacity:
-                    (selectedPreset || numQuestions) && testName ? 1 : 0.5,
+                    (selectedPreset || numQuestions) && testName && totalMarks ? 1 : 0.5,
                 },
               ]}
               onPress={handleContinue}
-              disabled={!(selectedPreset || numQuestions) || !testName}
+              disabled={!(selectedPreset || numQuestions) || !testName || !totalMarks}
             >
               <LinearGradient
                 colors={["#6366F1", "#8B5CF6"]}

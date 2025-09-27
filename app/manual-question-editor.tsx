@@ -36,6 +36,7 @@ interface Question {
 export default function ManualQuestionEditorScreen() {
   const params = useLocalSearchParams();
   const testName = params.testName as string;
+  const testTotalMarks = parseFloat(params.totalMarks as string) || 0;
   const totalQuestions = parseInt(params.totalQuestions as string);
   const currentQuestionNumber = parseInt(params.currentQuestion as string);
   
@@ -53,6 +54,17 @@ export default function ManualQuestionEditorScreen() {
   const [allQuestions, setAllQuestions] = useState<Question[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { theme, isDarkMode } = useTheme();
+
+  // Calculate total marks from all questions
+  const calculateRunningTotal = () => {
+    const otherQuestions = allQuestions.filter(q => q.questionNumber !== currentQuestionNumber);
+    const otherQuestionsTotal = otherQuestions.reduce((sum, q) => sum + q.totalMarks, 0);
+    return otherQuestionsTotal + question.totalMarks;
+  };
+
+  const runningTotal = calculateRunningTotal();
+  const isMarksValid = Math.abs(runningTotal - testTotalMarks) < 0.01;
+  const remainingMarks = testTotalMarks - (runningTotal - question.totalMarks);
 
   useEffect(() => {
     // Load saved questions if any
@@ -233,6 +245,7 @@ export default function ManualQuestionEditorScreen() {
         pathname: "/manual-question-editor",
         params: {
           testName,
+          totalMarks: testTotalMarks.toString(),
           totalQuestions: totalQuestions.toString(),
           currentQuestion: (currentQuestionNumber + 1).toString(),
           questions: JSON.stringify(updatedQuestions),
@@ -249,8 +262,20 @@ export default function ManualQuestionEditorScreen() {
       setIsLoading(true);
       console.log('🔄 Saving manual test...');
       
+      // Validate total marks before saving
+      const calculatedTotal = questions.reduce((sum, q) => sum + q.totalMarks, 0);
+      if (Math.abs(calculatedTotal - testTotalMarks) > 0.01) {
+        Alert.alert(
+          "Marks Validation Failed",
+          `The sum of all question marks (${calculatedTotal}) must equal the total test marks (${testTotalMarks}). Please adjust the marks for individual questions.`
+        );
+        setIsLoading(false);
+        return;
+      }
+      
       const testData = {
         testName,
+        totalMarks: testTotalMarks,
         questions: questions.map(q => ({
           questionNumber: q.questionNumber,
           questionText: q.questionText,
@@ -303,6 +328,7 @@ export default function ManualQuestionEditorScreen() {
         pathname: "/manual-question-editor",
         params: {
           testName,
+          totalMarks: testTotalMarks.toString(),
           totalQuestions: totalQuestions.toString(),
           currentQuestion: (currentQuestionNumber - 1).toString(),
           questions: JSON.stringify(updatedQuestions),
@@ -564,6 +590,35 @@ export default function ManualQuestionEditorScreen() {
                     keyboardType="numeric"
                     placeholder="Enter marks for this question"
                   />
+                  
+                  {/* Marks Validation Display */}
+                  <View style={styles.validationContainer}>
+                    <Text 
+                      variant="bodySmall" 
+                      style={[
+                        styles.validationText, 
+                        { color: isMarksValid ? theme.colors.outline : '#f44336' }
+                      ]}
+                    >
+                      Running Total: {runningTotal}/{testTotalMarks} marks
+                    </Text>
+                    {!isMarksValid && (
+                      <Text 
+                        variant="bodySmall" 
+                        style={[styles.validationWarning, { color: '#f44336' }]}
+                      >
+                        ⚠ Remaining: {remainingMarks.toFixed(2)} marks for other questions
+                      </Text>
+                    )}
+                    {isMarksValid && allQuestions.length + 1 === totalQuestions && (
+                      <Text 
+                        variant="bodySmall" 
+                        style={[styles.validationSuccess, { color: '#4caf50' }]}
+                      >
+                        ✅ Total marks allocation is complete!
+                      </Text>
+                    )}
+                  </View>
                 </View>
 
                 {/* Single Correct Answer Input (for non-multiple choice) */}
@@ -1149,5 +1204,25 @@ const styles = StyleSheet.create({
   autoDistributeText: {
     fontSize: 11,
     fontWeight: "500",
+  },
+  validationContainer: {
+    marginTop: 8,
+    padding: 8,
+    backgroundColor: 'rgba(128, 128, 128, 0.1)',
+    borderRadius: 6,
+  },
+  validationText: {
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  validationWarning: {
+    fontSize: 11,
+    fontWeight: "500",
+    marginTop: 4,
+  },
+  validationSuccess: {
+    fontSize: 11,
+    fontWeight: "500",
+    marginTop: 4,
   },
 });

@@ -187,6 +187,7 @@ export const manualTestService = {
   // Create a new manual test
   create: async (testData: {
     testName: string;
+    totalMarks: number;
     questions: Array<{
       questionNumber: number;
       questionText: string;
@@ -213,6 +214,7 @@ export const manualTestService = {
   // Update manual test
   update: async (testId: string, testData: {
     testName: string;
+    totalMarks: number;
     questions: Array<{
       questionNumber: number;
       questionText: string;
