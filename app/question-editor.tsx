@@ -377,7 +377,7 @@ export default function QuestionEditorScreen() {
   };
 
   const calculateTotalWeightage = () => {
-    if (isMultipleCorrect) {
+    if (formData.correct_options && formData.correct_options.length > 0) {
       const total = formData.correct_options.reduce((sum, option) => {
         return sum + (formData.weightages[option] || 0);
       }, 0);
@@ -670,6 +670,76 @@ export default function QuestionEditorScreen() {
     );
   };
 
+  // Helper functions for the new correct answer system
+  const addNewCorrectAnswer = () => {
+    const newCorrectOptions = [...(formData.correct_options || []), ""];
+    setFormData((prev) => ({
+      ...prev,
+      correct_options: newCorrectOptions,
+    }));
+  };
+
+  const removeCorrectAnswer = (index: number) => {
+    const newCorrectOptions = formData.correct_options.filter((_, i) => i !== index);
+    setFormData((prev) => ({
+      ...prev,
+      correct_options: newCorrectOptions,
+    }));
+    
+    // Remove weightage for this answer if it exists
+    const oldAnswer = formData.correct_options[index];
+    if (oldAnswer && formData.weightages[oldAnswer]) {
+      const newWeightages = { ...formData.weightages };
+      delete newWeightages[oldAnswer];
+      setFormData((prev) => ({
+        ...prev,
+        weightages: newWeightages,
+      }));
+    }
+  };
+
+  const updateCorrectAnswer = (index: number, newAnswer: string) => {
+    const newCorrectOptions = [...formData.correct_options];
+    const oldAnswer = newCorrectOptions[index];
+    
+    // Update the answer
+    newCorrectOptions[index] = newAnswer;
+    setFormData((prev) => ({
+      ...prev,
+      correct_options: newCorrectOptions,
+    }));
+    
+    // Update weightages - transfer old weightage to new answer
+    if (oldAnswer !== newAnswer && formData.weightages[oldAnswer]) {
+      const newWeightages = { ...formData.weightages };
+      newWeightages[newAnswer] = newWeightages[oldAnswer];
+      delete newWeightages[oldAnswer];
+      setFormData((prev) => ({
+        ...prev,
+        weightages: newWeightages,
+      }));
+    }
+  };
+
+  const autoDistributeMarks = () => {
+    if (!formData.correct_options || formData.correct_options.length === 0) return;
+    
+    const totalMarks = formData.points_per_blank || 1;
+    const marksPerAnswer = totalMarks / formData.correct_options.length;
+    
+    const newWeightages = { ...formData.weightages };
+    formData.correct_options.forEach(answer => {
+      if (answer.trim()) {
+        newWeightages[answer] = marksPerAnswer;
+      }
+    });
+    
+    setFormData((prev) => ({
+      ...prev,
+      weightages: newWeightages,
+    }));
+  };
+
   const renderOptionsSection = () => {
     // Don't show options section for fill-in-the-blanks questions
     if (formData.question_type === "fill_blanks") return null;
@@ -677,235 +747,308 @@ export default function QuestionEditorScreen() {
     return (
       <View style={[styles.sectionCard, { backgroundColor: theme.colors.surface }]}>
         <View style={styles.sectionHeader}>
-          <Ionicons name="list" size={24} color="#6366F1" />
+          <Ionicons name="checkmark-circle-outline" size={24} color="#6366F1" />
           <Text variant="titleLarge" style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-            Answer Options
+            Correct Answers
           </Text>
         </View>
 
-        <View style={styles.optionsToggleContainer}>
-          <View>
-            <Text style={[styles.optionsToggleLabel, { color: theme.colors.onSurface }]}>
-              Has Multiple Choice Options
+        {/* Multiple Choice Toggle */}
+        <View style={styles.multipleChoiceToggle}>
+          <View style={styles.toggleContent}>
+            <Text style={[styles.multipleChoiceToggleLabel, { color: theme.colors.onSurface }]}>
+              Multiple Choice Question
             </Text>
-            <HelperText type="info" style={styles.optionsToggleHelper}>
-              Enable if this question has predefined answer choices (A, B, C, D)
+            <HelperText type="info">
+              Enable if this question has multiple correct options with different weightages
             </HelperText>
           </View>
           <Switch
-            value={hasOptions}
-            onValueChange={setHasOptions}
+            value={isMultipleCorrect}
+            onValueChange={handleMultipleCorrectToggle}
           />
         </View>
 
-        {hasOptions && (
-          <>
-            {/* Multiple Correct Toggle */}
-            <View style={styles.multipleCorrectToggle}>
-              <View style={styles.toggleHeader}>
-                <Text style={[styles.toggleLabel, { color: theme.colors.onSurface }]}>
-                  Multiple Correct Answers
-                </Text>
-                <Switch
-                  value={isMultipleCorrect}
-                  onValueChange={handleMultipleCorrectToggle}
-                />
-              </View>
-              <HelperText type="info">
-                Enable if this question has more than one correct answer
+        {/* Single Correct Answer (when not multiple choice) */}
+        {!isMultipleCorrect && (
+          <View style={styles.singleCorrectContainer}>
+            <Text style={[styles.singleCorrectLabel, { color: theme.colors.onSurface }]}>
+              Correct Answer:
+            </Text>
+            <TextInput
+              style={[
+                styles.singleCorrectInput,
+                {
+                  backgroundColor: isDarkMode ? "#374151" : "#F9FAFB",
+                  color: theme.colors.onSurface,
+                  borderColor: theme.colors.outline,
+                  borderWidth: 1,
+                },
+              ]}
+              value={formData.correct_option || ''}
+              onChangeText={handleSingleCorrectChange}
+              placeholder="Enter the correct answer (A, B, C, D, etc.)"
+              placeholderTextColor={theme.colors.onSurfaceVariant}
+              multiline
+            />
+            {errors.correct_option && (
+              <HelperText type="error">
+                {errors.correct_option}
               </HelperText>
+            )}
+          </View>
+        )}
+
+        {/* Multiple Correct Options (when multiple choice enabled) */}
+        {isMultipleCorrect && (
+          <>
+            <View style={styles.multipleCorrectHeader}>
+              <HelperText type="info" style={styles.sectionDescription}>
+                Enter only the correct options for this question with their weightages. 
+                Use "Auto Distribute" to evenly distribute marks among all correct options.
+              </HelperText>
+              <View style={styles.headerRight}>
+                <TouchableOpacity
+                  style={[styles.autoDistributeButton, { backgroundColor: theme.colors.primary + "20", borderColor: theme.colors.primary }]}
+                  onPress={autoDistributeMarks}
+                >
+                  <Ionicons name="shuffle-outline" size={14} color={theme.colors.primary} />
+                  <Text style={[styles.autoDistributeText, { color: theme.colors.primary }]}>
+                    Auto Distribute
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
-            {/* Options List */}
-            <View style={styles.optionsList}>
-              {Object.keys(formData.options).length > 0 ? (
-                Object.entries(formData.options).map(([key, value]) => (
-                  <View key={key} style={styles.optionContainer}>
-                    <View style={styles.optionInputContainer}>
-                      <TextInput
-                        label={`Option ${key}`}
-                        value={value || ""}
-                        onChangeText={(text) => updateOption(key, text)}
-                        mode="outlined"
-                        style={styles.optionInput}
-                        right={
-                          <TextInput.Icon
-                            icon="close"
-                            onPress={() => removeOption(key)}
-                          />
-                        }
-                      />
-                    </View>
-                    
-                    {/* Correct Answer Selector */}
-                    <View style={styles.correctAnswerSelector}>
-                      {isMultipleCorrect ? (
-                        <TouchableOpacity
-                          style={[
-                            styles.checkboxContainer,
-                            {
-                              borderColor: formData.correct_options.includes(key) 
-                                ? "#10B981" : theme.colors.outline,
-                              backgroundColor: formData.correct_options.includes(key) 
-                                ? "#10B981" : "transparent"
-                            }
-                          ]}
-                          onPress={() => toggleCorrectOption(key)}
-                        >
-                          {formData.correct_options.includes(key) && (
-                            <Ionicons name="checkmark" size={16} color="white" />
-                          )}
-                        </TouchableOpacity>
-                      ) : (
-                        <TouchableOpacity
-                          style={[
-                            styles.radioContainer,
-                            {
-                              borderColor: formData.correct_option === key 
-                                ? "#10B981" : theme.colors.outline
-                            }
-                          ]}
-                          onPress={() => handleSingleCorrectChange(key)}
-                        >
-                          {formData.correct_option === key && (
-                            <View style={[styles.radioInner, { backgroundColor: "#10B981" }]} />
-                          )}
-                        </TouchableOpacity>
-                      )}
-                      <Text style={[styles.correctLabel, { color: theme.colors.onSurfaceVariant }]}>
-                        {isMultipleCorrect ? "Correct" : "Correct"}
+            {/* Display existing correct options for multiple choice */}
+            {formData.correct_options && formData.correct_options.length > 0 ? (
+              formData.correct_options.map((correctOption, index) => (
+                <View key={`correct-${index}`} style={[styles.correctAnswerContainer, { backgroundColor: theme.colors.primary + "10" }]}>
+                  <View style={styles.correctAnswerHeader}>
+                    <View style={styles.correctAnswerBadge}>
+                      <Ionicons name="checkmark-circle" size={16} color={theme.colors.primary} />
+                      <Text style={[styles.correctAnswerLabel, { color: theme.colors.primary }]}>
+                        Correct Option {index + 1}
                       </Text>
                     </View>
-
-                    {/* Weightage Input for Multiple Correct */}
-                    {isMultipleCorrect && formData.correct_options.includes(key) && (
-                      <View style={styles.weightageContainer}>
-                        <Text style={[styles.weightageLabel, { color: theme.colors.onSurfaceVariant }]}>
-                          Weight:
-                        </Text>
-                        <TextInput
-                          value={(formData.weightages[key] || 0).toString()}
-                          onChangeText={(text) => updateWeightage(key, parseFloat(text) || 0)}
-                          keyboardType="numeric"
-                          mode="outlined"
-                          style={styles.weightageInput}
-                        />
-                      </View>
+                    {formData.correct_options.length > 1 && (
+                      <TouchableOpacity
+                        style={styles.removeCorrectAnswer}
+                        onPress={() => removeCorrectAnswer(index)}
+                      >
+                        <Ionicons name="close-circle" size={18} color="#EF4444" />
+                      </TouchableOpacity>
                     )}
                   </View>
-                ))
-              ) : (
-                <Text style={[styles.emptyOptions, { color: theme.colors.onSurfaceVariant }]}>
-                  No options added yet. Tap "Add Option" to create answer choices.
-                </Text>
-              )}
-            </View>
 
-            {/* Add Option Button */}
+                  {/* Answer Text Input */}
+                  <View style={styles.correctAnswerInputGroup}>
+                    <Text style={[styles.correctAnswerInputLabel, { color: theme.colors.onSurface }]}>
+                      Correct Answer (A, B, C, D, etc.):
+                    </Text>
+                    <TextInput
+                      style={[
+                        styles.correctAnswerInput,
+                        {
+                          backgroundColor: isDarkMode ? "#374151" : "#F9FAFB",
+                          color: theme.colors.onSurface,
+                          borderColor: theme.colors.primary,
+                          borderWidth: 2,
+                        },
+                      ]}
+                      value={correctOption}
+                      onChangeText={(text) => updateCorrectAnswer(index, text)}
+                      placeholder="Enter A, B, C, D or full answer text"
+                      placeholderTextColor={theme.colors.onSurfaceVariant}
+                      multiline
+                    />
+                  </View>
+
+                  {/* Weightage Input */}
+                  <View style={styles.correctAnswerInputGroup}>
+                    <Text style={[styles.correctAnswerInputLabel, { color: theme.colors.onSurface }]}>
+                      Weightage (Marks):
+                    </Text>
+                    <TextInput
+                      style={[
+                        styles.weightageInput,
+                        {
+                          backgroundColor: isDarkMode ? "#374151" : "#F9FAFB",
+                          color: theme.colors.onSurface,
+                          borderColor: theme.colors.primary,
+                          borderWidth: 2,
+                        },
+                      ]}
+                      value={(formData.weightages[correctOption] || 0).toString()}
+                      onChangeText={(text) => updateWeightage(correctOption, parseFloat(text) || 0)}
+                      keyboardType="decimal-pad"
+                      placeholder="Enter marks (e.g., 0.5, 1, 2.5)"
+                      placeholderTextColor={theme.colors.onSurfaceVariant}
+                    />
+                  </View>
+                </View>
+              ))
+            ) : (
+              <Text style={[styles.emptyAnswers, { color: theme.colors.onSurfaceVariant }]}>
+                No correct options added yet. Add correct options with individual weightages.
+              </Text>
+            )}
+
+            {/* Add Correct Option Button */}
             <TouchableOpacity
-              style={[styles.addOptionButton, { borderColor: theme.colors.primary }]}
-              onPress={addNewOption}
+              style={[styles.addCorrectAnswerButton, { borderColor: theme.colors.primary }]}
+              onPress={addNewCorrectAnswer}
             >
               <Ionicons name="add-circle-outline" size={20} color={theme.colors.primary} />
-              <Text style={[styles.addOptionText, { color: theme.colors.primary }]}>
-                Add Option
+              <Text style={[styles.addCorrectAnswerText, { color: theme.colors.primary }]}>
+                Add Another Correct Option
               </Text>
             </TouchableOpacity>
 
-            {/* Correct Answers Preview */}
-            <View style={styles.correctAnswersPreview}>
-              <Text style={[styles.previewLabel, { color: theme.colors.onSurface }]}>
-                {isMultipleCorrect ? "Correct Answers:" : "Correct Answer:"}
-              </Text>
-              
-              {isMultipleCorrect ? (
-                <View style={styles.correctAnswersContainer}>
-                  {formData.correct_options.length > 0 ? (
-                    formData.correct_options.map((option) => (
-                      <View 
-                        key={option}
-                        style={[styles.correctAnswerChip, { backgroundColor: "#10B981" }]}
-                      >
-                        <Text style={styles.correctAnswerChipText}>
-                          {option}
-                        </Text>
-                      </View>
-                    ))
-                  ) : (
-                    <Text style={[styles.noSelectionText, { color: theme.colors.onSurfaceVariant }]}>
-                      No correct answers selected
-                    </Text>
-                  )}
-                </View>
-              ) : (
-                <View style={[styles.correctAnswerChip, { backgroundColor: "#10B981" }]}>
-                  <Text style={[styles.singleCorrectAnswer, { color: "white" }]}>
-                    {formData.correct_option || "None selected"}
-                  </Text>
-                </View>
-              )}
-
-              {/* Weightage Validation for Multiple Correct */}
-              {isMultipleCorrect && formData.correct_options.length > 0 && (
-                <View 
+            {/* Weightage Validation */}
+            {formData.correct_options.length > 0 && (
+              <View 
+                style={[
+                  styles.weightValidationContainer,
+                  {
+                    backgroundColor: calculateTotalWeightage() === formData.points_per_blank 
+                      ? "rgba(16, 185, 129, 0.1)" 
+                      : "rgba(245, 158, 11, 0.1)",
+                    borderColor: calculateTotalWeightage() === formData.points_per_blank 
+                      ? "#10B981" 
+                      : "#F59E0B"
+                  }
+                ]}
+              >
+                <Ionicons 
+                  name={calculateTotalWeightage() === formData.points_per_blank ? "checkmark-circle" : "warning"} 
+                  size={20} 
+                  color={calculateTotalWeightage() === formData.points_per_blank ? "#10B981" : "#F59E0B"}
+                />
+                <Text 
                   style={[
-                    styles.weightValidationContainer,
-                    {
-                      backgroundColor: calculateTotalWeightage() === formData.points_per_blank 
-                        ? "rgba(16, 185, 129, 0.1)" 
-                        : "rgba(245, 158, 11, 0.1)",
-                      borderColor: calculateTotalWeightage() === formData.points_per_blank 
+                    styles.weightValidationText,
+                    { 
+                      color: calculateTotalWeightage() === formData.points_per_blank 
                         ? "#10B981" 
-                        : "#F59E0B"
+                        : "#F59E0B" 
                     }
                   ]}
                 >
-                  <Ionicons 
-                    name={calculateTotalWeightage() === formData.points_per_blank ? "checkmark-circle" : "warning"} 
-                    size={20} 
-                    color={calculateTotalWeightage() === formData.points_per_blank ? "#10B981" : "#F59E0B"}
-                  />
-                  <Text 
-                    style={[
-                      styles.weightValidationText,
-                      {
-                        color: calculateTotalWeightage() === formData.points_per_blank 
-                          ? "#10B981" 
-                          : "#F59E0B"
-                      }
-                    ]}
-                  >
-                    Total Weight: {calculateTotalWeightage()} / {formData.points_per_blank}
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            {/* Error Display */}
-            <HelperText type="error" visible={!!errors.correct_option}>
-              {errors.correct_option}
-            </HelperText>
+                  {calculateTotalWeightage() === formData.points_per_blank 
+                    ? `✓ Perfect! Total weightage matches marks (${formData.points_per_blank})`
+                    : `⚠ Total weightage (${calculateTotalWeightage()}) should equal total marks (${formData.points_per_blank})`
+                  }
+                </Text>
+              </View>
+            )}
           </>
         )}
+      </View>
+    );
+  };
 
-        {/* Correct Answer for Non-Options Questions */}
-        {!hasOptions && (
-          <View style={styles.correctOptionsOnlySection}>
-            <Text style={[styles.correctOptionsTitle, { color: theme.colors.onSurface }]}>
-              Correct Answer
+  const renderFillBlanksSection = () => {
+    if (formData.question_type !== "fill_blanks") return null;
+
+    return (
+      <View style={[styles.sectionCard, { backgroundColor: theme.colors.surface }]}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="text" size={24} color="#6366F1" />
+          <Text variant="titleLarge" style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
+            Fill in the Blanks
+          </Text>
+        </View>
+        
+        <HelperText type="info" style={styles.sectionDescription}>
+          For fill-in-the-blank questions, students will type their answers directly. Enter the correct answers below.
+        </HelperText>
+
+        {/* Correct answers for fill-in-blanks */}
+        {formData.correct_options && formData.correct_options.length > 0 ? (
+          formData.correct_options.map((correctOption, index) => (
+            <View key={`fillblank-${index}`} style={[styles.correctAnswerContainer, { backgroundColor: theme.colors.primary + "10" }]}>
+              <View style={styles.correctAnswerHeader}>
+                <Text style={[styles.correctAnswerLabel, { color: theme.colors.primary }]}>
+                  Correct Answer {index + 1}
+                </Text>
+                {formData.correct_options.length > 1 && (
+                  <TouchableOpacity
+                    style={styles.removeCorrectAnswer}
+                    onPress={() => removeCorrectAnswer(index)}
+                  >
+                    <Ionicons name="close-circle" size={18} color="#EF4444" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <TextInput
+                label={`Answer ${index + 1}`}
+                value={correctOption}
+                onChangeText={(text) => updateCorrectAnswer(index, text)}
+                mode="outlined"
+                style={styles.correctAnswerInput}
+                placeholder="Enter correct answer text..."
+              />
+              
+              <View style={styles.correctAnswerInputGroup}>
+                <Text style={[styles.correctAnswerInputLabel, { color: theme.colors.onSurface }]}>
+                  Marks for this answer:
+                </Text>
+                <TextInput
+                  value={(formData.weightages[correctOption] || 0).toString()}
+                  onChangeText={(text) => updateWeightage(correctOption, parseFloat(text) || 0)}
+                  keyboardType="decimal-pad"
+                  mode="outlined"
+                  style={styles.weightageInput}
+                  placeholder="Enter marks"
+                />
+              </View>
+            </View>
+          ))
+        ) : (
+          <Text style={[styles.emptyAnswers, { color: theme.colors.onSurfaceVariant }]}>
+            No correct answers added yet. Add answers for fill-in-the-blank questions.
+          </Text>
+        )}
+
+        <TouchableOpacity
+          style={[styles.addCorrectAnswerButton, { borderColor: theme.colors.primary }]}
+          onPress={addNewCorrectAnswer}
+        >
+          <Ionicons name="add-circle-outline" size={20} color={theme.colors.primary} />
+          <Text style={[styles.addCorrectAnswerText, { color: theme.colors.primary }]}>
+            Add Correct Answer
+          </Text>
+        </TouchableOpacity>
+
+        {/* Weightage validation */}
+        {formData.correct_options.length > 0 && (
+          <View 
+            style={[
+              styles.weightValidationContainer,
+              {
+                backgroundColor: calculateTotalWeightage() === formData.points_per_blank 
+                  ? "rgba(16, 185, 129, 0.1)" 
+                  : "rgba(245, 158, 11, 0.1)",
+                borderColor: calculateTotalWeightage() === formData.points_per_blank 
+                  ? "#10B981" 
+                  : "#F59E0B"
+              }
+            ]}
+          >
+            <Text 
+              style={[
+                styles.weightValidationText,
+                { 
+                  color: calculateTotalWeightage() === formData.points_per_blank 
+                    ? "#10B981" 
+                    : "#F59E0B" 
+                }
+              ]}
+            >
+              Total weightage: {calculateTotalWeightage()} / {formData.points_per_blank}
             </Text>
-            <TextInput
-              label="Correct Answer"
-              value={formData.correct_option}
-              onChangeText={handleSingleCorrectChange}
-              mode="outlined"
-              error={!!errors.correct_option}
-              style={styles.correctOptionInput}
-              placeholder="Enter the correct answer..."
-            />
-            <HelperText type="error" visible={!!errors.correct_option}>
-              {errors.correct_option}
-            </HelperText>
           </View>
         )}
       </View>
@@ -1316,5 +1459,128 @@ const styles = StyleSheet.create({
   },
   bottomSpacing: {
     height: 40,
+  },
+  // New styles for manual test style correct answers
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  autoDistributeButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  autoDistributeText: {
+    fontSize: 12,
+    fontWeight: "500",
+    marginLeft: 4,
+  },
+  sectionDescription: {
+    marginTop: 8,
+    marginBottom: 16,
+    fontSize: 14,
+  },
+  correctAnswerContainer: {
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  correctAnswerHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  correctAnswerBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  correctAnswerLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginLeft: 6,
+  },
+  removeCorrectAnswer: {
+    padding: 4,
+  },
+  correctAnswerInputGroup: {
+    marginBottom: 12,
+  },
+  correctAnswerInputLabel: {
+    fontSize: 14,
+    fontWeight: "500",
+    marginBottom: 8,
+  },
+  correctAnswerInput: {
+    backgroundColor: "transparent",
+    fontSize: 16,
+  },
+  emptyAnswers: {
+    textAlign: "center",
+    fontStyle: "italic",
+    padding: 20,
+    fontSize: 14,
+  },
+  addCorrectAnswerButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderStyle: "dashed",
+    marginTop: 8,
+  },
+  addCorrectAnswerText: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginLeft: 8,
+  },
+  // Multiple choice toggle styles
+  multipleChoiceToggle: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(99, 102, 241, 0.2)",
+    backgroundColor: "rgba(99, 102, 241, 0.05)",
+  },
+  toggleContent: {
+    flex: 1,
+    marginRight: 16,
+  },
+  multipleChoiceToggleLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  // Single correct answer styles
+  singleCorrectContainer: {
+    marginBottom: 16,
+  },
+  singleCorrectLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 8,
+  },
+  singleCorrectInput: {
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    minHeight: 50,
+  },
+  // Multiple correct header
+  multipleCorrectHeader: {
+    flexDirection: "column",
+    marginBottom: 16,
   },
 });

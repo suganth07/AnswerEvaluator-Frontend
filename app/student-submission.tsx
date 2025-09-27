@@ -49,6 +49,8 @@ export default function StudentSubmissionScreen() {
   const [papers, setPapers] = useState<Paper[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1); // Track current page being uploaded
+  const [pageImages, setPageImages] = useState<{[key: number]: ImageInfo}>({}); // Store images by page number
 
   useEffect(() => {
     loadPapers();
@@ -56,6 +58,8 @@ export default function StudentSubmissionScreen() {
 
   useEffect(() => {
     setSelectedImages([]);
+    setPageImages({});
+    setCurrentPage(1);
   }, [selectedPaper]);
 
   const loadPapers = async () => {
@@ -127,19 +131,32 @@ export default function StudentSubmissionScreen() {
     const isMultiPage = selectedPaper && (selectedPaper.total_pages || 1) > 1;
 
     if (isMultiPage) {
+      // For multi-page papers, select one image for current page
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsMultipleSelection: true,
-        selectionLimit: selectedPaper?.total_pages || 1,
-        allowsEditing: false,
+        allowsEditing: true,
+        aspect: [3, 4],
         quality: 0.8,
       });
 
-      if (!result.canceled && result.assets) {
-        setSelectedImages(result.assets as ImageInfo[]);
+      if (!result.canceled && result.assets[0]) {
+        const newPageImages = { ...pageImages };
+        newPageImages[currentPage] = result.assets[0] as ImageInfo;
+        setPageImages(newPageImages);
+        
+        // Update selectedImages array for backward compatibility
+        const imagesArray = [];
+        for (let i = 1; i <= (selectedPaper.total_pages || 1); i++) {
+          if (newPageImages[i]) {
+            imagesArray.push(newPageImages[i]);
+          }
+        }
+        setSelectedImages(imagesArray);
+        
         if (currentStep < 4) setCurrentStep(4);
       }
     } else {
+      // For single-page papers, use original logic
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -171,8 +188,21 @@ export default function StudentSubmissionScreen() {
       const isMultiPage = selectedPaper && (selectedPaper.total_pages || 1) > 1;
 
       if (isMultiPage) {
-        setSelectedImages((prev) => [...prev, result.assets[0] as ImageInfo]);
+        // For multi-page, store image for current page
+        const newPageImages = { ...pageImages };
+        newPageImages[currentPage] = result.assets[0] as ImageInfo;
+        setPageImages(newPageImages);
+        
+        // Update selectedImages array for backward compatibility
+        const imagesArray = [];
+        for (let i = 1; i <= (selectedPaper.total_pages || 1); i++) {
+          if (newPageImages[i]) {
+            imagesArray.push(newPageImages[i]);
+          }
+        }
+        setSelectedImages(imagesArray);
       } else {
+        // For single-page, replace existing image
         setSelectedImages([result.assets[0] as ImageInfo]);
       }
       if (currentStep < 4) setCurrentStep(4);
@@ -186,14 +216,44 @@ export default function StudentSubmissionScreen() {
     Alert.alert(
       'Select Answer Sheet',
       isMultiPage 
-        ? `This question paper has ${maxPages} pages. You can select multiple images.`
+        ? `Upload Page ${currentPage} of ${maxPages} for this question paper.`
         : 'Choose how you want to select your answer sheet',
       [
         { text: 'Take Photo', onPress: takePhoto },
-        { text: isMultiPage ? 'Select Multiple' : 'Gallery', onPress: selectImages },
+        { text: 'Gallery', onPress: selectImages },
         { text: 'Cancel', style: 'cancel' },
       ]
     );
+  };
+
+  const goToNextPage = () => {
+    const maxPages = selectedPaper?.total_pages || 1;
+    if (currentPage < maxPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const goToPreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const goToSpecificPage = (pageNumber: number) => {
+    const maxPages = selectedPaper?.total_pages || 1;
+    if (pageNumber >= 1 && pageNumber <= maxPages) {
+      setCurrentPage(pageNumber);
+    }
+  };
+
+  const isPageUploaded = (pageNumber: number) => {
+    return pageImages[pageNumber] !== undefined;
+  };
+
+  const getAllUploadedPages = () => {
+    const maxPages = selectedPaper?.total_pages || 1;
+    const uploadedCount = Object.keys(pageImages).length;
+    return { uploadedCount, maxPages, isComplete: uploadedCount === maxPages };
   };
 
   const submitAnswers = async () => {
@@ -218,13 +278,16 @@ export default function StudentSubmissionScreen() {
     }
 
     const isMultiPage = (selectedPaper?.total_pages || 1) > 1;
-    if (isMultiPage && selectedImages.length !== (selectedPaper?.total_pages || 1)) {
-      Alert.alert(
-        'Page Count Mismatch',
-        `This question paper has ${selectedPaper?.total_pages} pages, but you selected ${selectedImages.length} image(s). Please select exactly ${selectedPaper?.total_pages} images - one for each page.`,
-        [{ text: 'OK' }]
-      );
-      return;
+    if (isMultiPage) {
+      const { uploadedCount, maxPages, isComplete } = getAllUploadedPages();
+      if (!isComplete) {
+        Alert.alert(
+          'Incomplete Upload',
+          `This question paper has ${maxPages} pages, but you have only uploaded ${uploadedCount} page(s). Please upload all ${maxPages} pages before submitting.`,
+          [{ text: 'OK' }]
+        );
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -235,15 +298,19 @@ export default function StudentSubmissionScreen() {
       formData.append('paperId', selectedPaper.id.toString());
 
       if (isMultiPage) {
-        selectedImages.forEach((image, index) => {
-          const imageFile = {
-            uri: image.uri,
-            type: 'image/jpeg',
-            name: `answer-sheet-page-${index + 1}.jpg`,
-          } as any;
+        // Use pageImages to maintain correct page order
+        for (let pageNum = 1; pageNum <= (selectedPaper?.total_pages || 1); pageNum++) {
+          const pageImage = pageImages[pageNum];
+          if (pageImage) {
+            const imageFile = {
+              uri: pageImage.uri,
+              type: 'image/jpeg',
+              name: `answer-sheet-page-${pageNum}.jpg`,
+            } as any;
 
-          formData.append('answerSheets', imageFile);
-        });
+            formData.append('answerSheets', imageFile);
+          }
+        }
       } else {
         const imageFile = {
           uri: selectedImages[0].uri,
@@ -276,6 +343,8 @@ export default function StudentSubmissionScreen() {
                 setRollNo('');
                 setSelectedPaper(null);
                 setSelectedImages([]);
+                setPageImages({});
+                setCurrentPage(1);
                 setCurrentStep(1);
               },
             },
@@ -744,7 +813,189 @@ export default function StudentSubmissionScreen() {
               </Text>
             </View>
 
-            {selectedImages.length > 0 ? (
+            {selectedPaper && (selectedPaper.total_pages || 1) > 1 ? (
+              // Multi-page interface with page-by-page upload
+              <View style={styles.multiPageInterface}>
+                {/* Page Progress Indicator */}
+                <View style={styles.pageProgress}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    {Array.from({ length: selectedPaper.total_pages || 1 }, (_, index) => {
+                      const pageNum = index + 1;
+                      const isUploaded = isPageUploaded(pageNum);
+                      const isCurrent = pageNum === currentPage;
+                      
+                      return (
+                        <TouchableOpacity
+                          key={pageNum}
+                          style={[
+                            styles.pageIndicator,
+                            {
+                              backgroundColor: isUploaded 
+                                ? '#10B981' 
+                                : isCurrent 
+                                ? '#6366F1' 
+                                : isDarkMode ? '#374151' : '#E5E7EB',
+                              borderWidth: isCurrent ? 2 : 0,
+                              borderColor: isCurrent ? '#8B5CF6' : 'transparent',
+                            }
+                          ]}
+                          onPress={() => goToSpecificPage(pageNum)}
+                          disabled={submitting}
+                        >
+                          {isUploaded ? (
+                            <Ionicons name="checkmark" size={16} color="white" />
+                          ) : (
+                            <Text
+                              style={[
+                                styles.pageNumber,
+                                { 
+                                  color: isCurrent 
+                                    ? 'white' 
+                                    : isDarkMode ? '#9CA3AF' : '#6B7280'
+                                }
+                              ]}
+                            >
+                              {pageNum}
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+
+                {/* Current Page Upload */}
+                <View style={styles.currentPageSection}>
+                  <Text style={[styles.currentPageTitle, { color: theme.colors.onSurface }]}>
+                    Page {currentPage} of {selectedPaper.total_pages}
+                  </Text>
+                  
+                  {pageImages[currentPage] ? (
+                    <View style={styles.uploadedPagePreview}>
+                      <Image
+                        source={{ uri: pageImages[currentPage].uri }}
+                        style={styles.uploadedPageImage}
+                      />
+                      <View style={styles.uploadedPageActions}>
+                        <TouchableOpacity
+                          onPress={showImagePicker}
+                          style={styles.replaceImageBtn}
+                          disabled={submitting}
+                        >
+                          <Ionicons name="refresh" size={16} color="#6366F1" />
+                          <Text style={styles.replaceImageText}>Replace Page {currentPage}</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={[
+                        styles.pageUploadArea,
+                        { borderColor: isDarkMode ? '#374151' : '#E5E7EB' },
+                      ]}
+                      onPress={showImagePicker}
+                      disabled={submitting}
+                    >
+                      <Ionicons name="camera-outline" size={40} color="#6366F1" />
+                      <Text
+                        style={[
+                          styles.pageUploadTitle,
+                          { color: theme.colors.onSurface },
+                        ]}
+                      >
+                        Upload Page {currentPage}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.pageUploadSubtitle,
+                          { color: theme.colors.onSurfaceVariant },
+                        ]}
+                      >
+                        Take a photo or select from gallery
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Page Navigation */}
+                  <View style={styles.pageNavigation}>
+                    <TouchableOpacity
+                      style={[
+                        styles.navButton,
+                        styles.prevButton,
+                        {
+                          backgroundColor: currentPage > 1 ? '#6366F1' : isDarkMode ? '#374151' : '#E5E7EB',
+                        }
+                      ]}
+                      onPress={goToPreviousPage}
+                      disabled={currentPage <= 1 || submitting}
+                    >
+                      <Ionicons 
+                        name="chevron-back" 
+                        size={20} 
+                        color={currentPage > 1 ? 'white' : isDarkMode ? '#9CA3AF' : '#6B7280'} 
+                      />
+                      <Text
+                        style={[
+                          styles.navButtonText,
+                          { 
+                            color: currentPage > 1 ? 'white' : isDarkMode ? '#9CA3AF' : '#6B7280'
+                          }
+                        ]}
+                      >
+                        Previous
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.navButton,
+                        styles.nextButton,
+                        {
+                          backgroundColor: currentPage < (selectedPaper.total_pages || 1) ? '#6366F1' : isDarkMode ? '#374151' : '#E5E7EB',
+                        }
+                      ]}
+                      onPress={goToNextPage}
+                      disabled={currentPage >= (selectedPaper.total_pages || 1) || submitting}
+                    >
+                      <Text
+                        style={[
+                          styles.navButtonText,
+                          { 
+                            color: currentPage < (selectedPaper.total_pages || 1) ? 'white' : isDarkMode ? '#9CA3AF' : '#6B7280'
+                          }
+                        ]}
+                      >
+                        Next
+                      </Text>
+                      <Ionicons 
+                        name="chevron-forward" 
+                        size={20} 
+                        color={currentPage < (selectedPaper.total_pages || 1) ? 'white' : isDarkMode ? '#9CA3AF' : '#6B7280'} 
+                      />
+                    </TouchableOpacity>
+                  </View>
+                  
+                  {/* Upload Progress Summary */}
+                  <View style={styles.uploadSummary}>
+                    <View style={styles.summaryRow}>
+                      <Text style={[styles.summaryLabel, { color: theme.colors.onSurfaceVariant }]}>
+                        Progress:
+                      </Text>
+                      <Text style={[styles.summaryValue, { color: theme.colors.onSurface }]}>
+                        {getAllUploadedPages().uploadedCount} of {selectedPaper.total_pages} pages uploaded
+                      </Text>
+                    </View>
+                    {getAllUploadedPages().isComplete && (
+                      <View style={styles.completeBanner}>
+                        <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+                        <Text style={styles.completeText}>All pages uploaded! Ready to submit.</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </View>
+            ) : selectedImages.length > 0 ? (
+              // Single page interface (original)
               <View style={styles.imagesPreview}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   {selectedImages.map((image, index) => (
@@ -1262,5 +1513,146 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     flex: 1,
     lineHeight: 16,
+  },
+  // Multi-page upload styles
+  multiPageInterface: {
+    marginTop: 16,
+  },
+  pageProgress: {
+    marginBottom: 20,
+    paddingHorizontal: 4,
+  },
+  pageIndicator: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  pageNumber: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  currentPageSection: {
+    alignItems: 'center',
+  },
+  currentPageTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+  },
+  uploadedPagePreview: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  uploadedPageImage: {
+    width: 120,
+    height: 160,
+    borderRadius: 12,
+    backgroundColor: '#f5f5f5',
+    marginBottom: 12,
+  },
+  uploadedPageActions: {
+    alignItems: 'center',
+  },
+  replaceImageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#6366F1',
+  },
+  replaceImageText: {
+    color: '#6366F1',
+    marginLeft: 6,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  pageUploadArea: {
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderRadius: 16,
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    marginBottom: 20,
+    minHeight: 200,
+    justifyContent: 'center',
+  },
+  pageUploadTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 12,
+    marginBottom: 6,
+  },
+  pageUploadSubtitle: {
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  pageNavigation: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 20,
+  },
+  navButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    minWidth: 100,
+    justifyContent: 'center',
+  },
+  prevButton: {
+    marginRight: 8,
+  },
+  nextButton: {
+    marginLeft: 8,
+  },
+  navButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginHorizontal: 4,
+  },
+  uploadSummary: {
+    width: '100%',
+    padding: 16,
+    backgroundColor: 'rgba(99, 102, 241, 0.05)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.2)',
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  summaryLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  summaryValue: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  completeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  completeText: {
+    color: '#10B981',
+    fontSize: 13,
+    fontWeight: '600',
+    marginLeft: 6,
   },
 });
