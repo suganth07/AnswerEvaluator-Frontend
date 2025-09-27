@@ -27,6 +27,15 @@ interface PendingSubmission {
   paperName: string;
   source: 'drive' | 'database';
   imageUrl?: string;
+  totalPages?: number;
+  pages?: Array<{
+    pageNumber: number;
+    fileId?: string;
+    fileName: string;
+    submissionId?: number;
+    imageUrl?: string;
+    uploadedAt: string;
+  }>;
 }
 
 export default function PendingSubmissionsScreen() {
@@ -83,9 +92,15 @@ export default function PendingSubmissionsScreen() {
         studentName: submission.studentName,
         rollNo: submission.rollNo,
         source: submission.source,
-        ...(submission.source === 'drive'
-          ? { fileId: submission.fileId, fileName: submission.fileName }
-          : { submissionId: submission.submissionId }
+        // Handle multi-page submissions
+        ...(submission.totalPages && submission.totalPages > 1 
+          ? { 
+              pages: submission.pages,
+              fileName: `${submission.studentName}_${submission.totalPages}_pages`
+            }
+          : submission.source === 'drive'
+            ? { fileId: submission.fileId, fileName: submission.fileName }
+            : { submissionId: submission.submissionId, imageUrl: submission.imageUrl }
         )
       };
 
@@ -223,12 +238,25 @@ export default function PendingSubmissionsScreen() {
             >
               {submission.source === 'drive' ? 'Google Drive' : 'Database'}
             </Chip>
+            {submission.totalPages && submission.totalPages > 1 ? (
+              <Chip 
+                mode="outlined"
+                textStyle={{ color: '#FF6B35', fontSize: 12 }}
+                style={[styles.sourceChip, { borderColor: '#FF6B35', marginLeft: 8 }]}
+                compact
+                icon="file-multiple"
+              >
+                {submission.totalPages} Pages
+              </Chip>
+            ) : null}
             <Text
               variant="bodySmall"
               style={[styles.fileName, { color: theme.colors.onSurfaceVariant }]}
               numberOfLines={1}
             >
-              {submission.fileName}
+              {submission.totalPages && submission.totalPages > 1 
+                ? `${submission.studentName} - ${submission.totalPages} page submission`
+                : submission.fileName}
             </Text>
           </View>
 
@@ -243,7 +271,9 @@ export default function PendingSubmissionsScreen() {
               labelStyle={styles.buttonLabel}
               icon="play-circle-outline"
             >
-              {isEvaluating ? "Evaluating..." : "Evaluate Now"}
+              {isEvaluating 
+                ? `Evaluating ${submission.totalPages && submission.totalPages > 1 ? `${submission.totalPages} pages...` : '...'}`
+                : `Evaluate ${submission.totalPages && submission.totalPages > 1 ? `${submission.totalPages} Pages` : 'Now'}`}
             </Button>
           </View>
         </Card.Content>
@@ -292,7 +322,9 @@ export default function PendingSubmissionsScreen() {
               Yet to be Evaluated
             </Text>
             <Text variant="bodyLarge" style={styles.headerSubtitle}>
-              {paperName} • {pendingSubmissions.length} pending submissions
+              {paperName} • {pendingSubmissions.length} student{pendingSubmissions.length === 1 ? '' : 's'} pending
+              {pendingSubmissions.some(s => s.totalPages && s.totalPages > 1) && 
+                ` (${pendingSubmissions.reduce((total, s) => total + (s.totalPages || 1), 0)} total pages)`}
             </Text>
           </View>
           <View style={styles.headerIcon}>
@@ -317,7 +349,9 @@ export default function PendingSubmissionsScreen() {
         {pendingSubmissions.length > 0 ? (
           <>
             <Text variant="titleMedium" style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-              Submissions awaiting evaluation
+              {pendingSubmissions.some(s => s.totalPages && s.totalPages > 1) 
+                ? 'Students awaiting evaluation (multi-page submissions consolidated)'
+                : 'Submissions awaiting evaluation'}
             </Text>
             {pendingSubmissions
               .sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime())

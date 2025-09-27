@@ -129,8 +129,9 @@ export default function StudentSubmissionScreen() {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
-        aspect: [3, 4],
-        quality: 0.8,
+        aspect: [210, 297], // A4 ratio for better document cropping
+        quality: 0.9, // Higher quality for better OCR
+        allowsMultipleSelection: false,
       });
 
       if (!result.canceled && result.assets[0]) {
@@ -154,8 +155,9 @@ export default function StudentSubmissionScreen() {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
-        aspect: [3, 4],
-        quality: 0.8,
+        aspect: [210, 297], // A4 ratio for better document cropping
+        quality: 0.9, // Higher quality for better OCR
+        allowsMultipleSelection: false,
       });
 
       if (!result.canceled && result.assets[0]) {
@@ -177,8 +179,9 @@ export default function StudentSubmissionScreen() {
 
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
-      aspect: [3, 4],
-      quality: 0.8,
+      aspect: [210, 297], // A4 ratio for better document cropping
+      quality: 0.9, // Higher quality for better OCR
+      allowsMultipleSelection: false,
     });
 
     if (!result.canceled && result.assets[0]) {
