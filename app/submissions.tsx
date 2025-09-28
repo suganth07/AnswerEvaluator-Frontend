@@ -16,6 +16,8 @@ import { paperService } from "../services/api";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 
 const { width } = Dimensions.get("window");
 
@@ -64,6 +66,78 @@ export default function SubmissionsScreen() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  const exportToExcel = async () => {
+    try {
+      if (!paperId || !paper) {
+        Alert.alert("Error", "Paper information not available");
+        return;
+      }
+
+      // Show loading alert
+      Alert.alert("Exporting", "Generating Excel file...", [{ text: "OK" }]);
+
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+      console.log('API URL:', apiUrl);
+      console.log('Paper ID:', paperId);
+      
+      if (!apiUrl) {
+        Alert.alert("Error", "API URL not configured. Please check environment settings.");
+        return;
+      }
+
+      const downloadUrl = `${apiUrl}/api/submissions/export-excel/${paperId}`;
+      console.log('Download URL:', downloadUrl);
+      
+      // Generate clean filename and use proper FileSystem path
+      const fileName = `${paper.name.replace(/[^a-zA-Z0-9]/g, '_')}_submissions.xlsx`;
+      
+      // Use the proper document directory from FileSystem legacy API
+      const fileUri = FileSystem.documentDirectory + fileName;
+      console.log('File URI:', fileUri);
+
+      // Download file directly to app storage using legacy API
+      console.log('Starting download...');
+      const downloadResult = await FileSystem.downloadAsync(downloadUrl, fileUri);
+      console.log('Download result:', downloadResult);
+
+      if (downloadResult.status === 200) {
+        console.log('Download successful');
+        // Check if sharing is available
+        const isAvailable = await Sharing.isAvailableAsync();
+        
+        if (isAvailable) {
+          // Share the file (this opens native share sheet)
+          await Sharing.shareAsync(downloadResult.uri, {
+            mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            dialogTitle: 'Save Excel File',
+          });
+          
+          Alert.alert("Success", "Excel file has been generated! Use the share options to save it.");
+        } else {
+          Alert.alert("Success", "Excel file has been downloaded to app storage.");
+        }
+      } else {
+        console.log('Download failed with status:', downloadResult.status);
+        throw new Error(`Failed to download file. Server returned status: ${downloadResult.status}`);
+      }
+    } catch (error: any) {
+      console.error("Error exporting to Excel:", error);
+      console.error("Error details:", error.message);
+      
+      let errorMessage = "Failed to export submissions to Excel.";
+      
+      if (error.message.includes("Network request failed")) {
+        errorMessage += " Please check if the backend server is running and your internet connection.";
+      } else if (error.message.includes("status:")) {
+        errorMessage += ` Server error: ${error.message}`;
+      } else {
+        errorMessage += ` ${error.message}`;
+      }
+      
+      Alert.alert("Error", errorMessage);
     }
   };
 
@@ -320,13 +394,21 @@ export default function SubmissionsScreen() {
 
             {/* Action Cards */}
             <View style={styles.actionCardsContainer}>
-              <Text
-                variant="titleLarge"
-                style={[styles.sectionTitle, { color: theme.colors.onSurface }]}
-              >
-                Quick Actions
-              </Text>
-
+              <View style={styles.quickActionsHeader}>
+                <Text
+                  variant="titleLarge"
+                  style={[styles.sectionTitle, { color: theme.colors.onSurface }]}
+                >
+                  Quick Actions
+                </Text>
+                <TouchableOpacity
+                  style={styles.exportButton}
+                  onPress={exportToExcel}
+                >
+                  <MaterialCommunityIcons name="microsoft-excel" size={24} color="white" />
+                </TouchableOpacity>
+              </View>
+                    
               {/* Pending Evaluations Card */}
               <TouchableOpacity
                 style={styles.modernCard}
@@ -558,6 +640,20 @@ const styles = StyleSheet.create({
   headerInfo: {
     flex: 1,
   },
+  exportButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: "#28A745",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 40,
+  },
   modernHeaderTitle: {
     color: "white",
     fontWeight: "700",
@@ -669,6 +765,12 @@ const styles = StyleSheet.create({
   },
   actionCardsContainer: {
     marginBottom: 32,
+  },
+  quickActionsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
   },
   modernCard: {
     marginBottom: 16,

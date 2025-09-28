@@ -8,13 +8,14 @@ import {
   Dimensions,
   Alert,
   FlatList,
+  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Text, Card, Avatar, Chip, ActivityIndicator } from "react-native-paper";
 import { useTheme } from "../context/ThemeContext";
 import { paperService, submissionService } from "../services/api";
 import { router, useLocalSearchParams } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { PieChart } from "react-native-chart-kit";
 
@@ -80,6 +81,33 @@ export default function TestSubmissionsScreen() {
   const onRefresh = () => {
     setRefreshing(true);
     fetchTestSubmissions();
+  };
+
+  const exportToExcel = async () => {
+    try {
+      if (!paperId || !paper) {
+        Alert.alert("Error", "Paper information not available");
+        return;
+      }
+
+      // Show loading alert
+      Alert.alert("Exporting", "Generating Excel file...");
+
+      const url = process.env.EXPO_PUBLIC_API_URL;
+      const downloadUrl = `${url}/submissions/export-excel/${paperId}`;
+
+      // For web/mobile, we can open the download URL directly
+      const supported = await Linking.canOpenURL(downloadUrl);
+      if (supported) {
+        await Linking.openURL(downloadUrl);
+        Alert.alert("Success", "Excel file download started! Check your downloads folder.");
+      } else {
+        Alert.alert("Error", "Cannot open download link");
+      }
+    } catch (error: any) {
+      console.error("Error exporting to Excel:", error);
+      Alert.alert("Error", "Failed to export submissions to Excel");
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -508,6 +536,12 @@ export default function TestSubmissionsScreen() {
               Test Submissions & Results
             </Text>
           </View>
+          <TouchableOpacity
+            style={styles.exportButton}
+            onPress={exportToExcel}
+          >
+            <MaterialCommunityIcons name="microsoft-excel" size={24} color="white" />
+          </TouchableOpacity>
         </View>
       </LinearGradient>
 
@@ -602,6 +636,12 @@ const styles = StyleSheet.create({
   backButton: {
     padding: 8,
     marginRight: 12,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.2)",
+  },
+  exportButton: {
+    padding: 8,
+    marginLeft: 12,
     borderRadius: 20,
     backgroundColor: "rgba(255,255,255,0.2)",
   },
