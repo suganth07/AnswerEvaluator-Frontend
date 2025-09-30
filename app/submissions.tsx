@@ -143,7 +143,7 @@ export default function SubmissionsScreen() {
 
   const fetchSubmissionCounts = async () => {
     try {
-      // Fetch pending files count from Google Drive
+      // Fetch pending files count from MinIO
       const pendingResponse = await fetch(
         `${url}/api/submissions/pending-files/${paperId}`
       );

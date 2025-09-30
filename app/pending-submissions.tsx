@@ -25,7 +25,7 @@ interface PendingSubmission {
   rollNo: string;
   uploadedAt: string;
   paperName: string;
-  source: 'drive' | 'database';
+  source: 'drive' | 'database' | 'minio';
   imageUrl?: string;
   totalPages?: number;
   pages?: Array<{
@@ -234,9 +234,9 @@ export default function PendingSubmissionsScreen() {
                 borderColor: submission.source === 'drive' ? '#2196F3' : '#9C27B0'
               }]}
               compact
-              icon={submission.source === 'drive' ? 'cloud' : 'database'}
+              icon={submission.source === 'minio' || submission.source === 'drive' ? 'cloud' : 'database'}
             >
-              {submission.source === 'drive' ? 'Google Drive' : 'Database'}
+              {submission.source === 'minio' || submission.source === 'drive' ? 'MinIO Storage' : 'Database'}
             </Chip>
             {submission.totalPages && submission.totalPages > 1 ? (
               <Chip 

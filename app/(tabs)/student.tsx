@@ -331,9 +331,9 @@ export default function StudentSubmissionScreen() {
         }\nPaper: ${response.paperName}\nEvaluation: ${
           response.evaluationMethod || "Auto-detected"
         }\n\n${
-          response.driveInfo?.uploadedToDrive
-            ? "✓ Stored in Google Drive"
-            : "⚠ Drive upload failed"
+          response.minioInfo?.uploadedToMinIO
+            ? "✓ Stored in MinIO Storage"
+            : "⚠ MinIO upload failed"
         }`,
         [
           {
