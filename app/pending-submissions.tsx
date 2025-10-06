@@ -98,7 +98,7 @@ export default function PendingSubmissionsScreen() {
               pages: submission.pages,
               fileName: `${submission.studentName}_${submission.totalPages}_pages`
             }
-          : submission.source === 'drive'
+          : (submission.source === 'drive' || submission.source === 'minio')
             ? { fileId: submission.fileId, fileName: submission.fileName }
             : { submissionId: submission.submissionId, imageUrl: submission.imageUrl }
         )

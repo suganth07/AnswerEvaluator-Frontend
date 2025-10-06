@@ -58,6 +58,7 @@ interface SubmissionDetails {
   paper_name: string;
   score: number;
   total_questions: number;
+  total_marks?: number; // Add total_marks field from Paper model
   percentage: number;
   submitted_at: string;
   answers: Answer[];
@@ -116,6 +117,7 @@ export default function ResultScreen() {
           paper_name: details.paper_name || details.paperName || params.paperName || 'Unknown Paper',
           score: Number(details.score) || 0,
           total_questions: Number(details.total_questions || details.totalQuestions) || 0,
+          total_marks: Number(details.total_marks || details.totalMarks) || Number(details.total_questions || details.totalQuestions) || 0,
           percentage: Number(details.percentage) || 0,
           submitted_at: details.submitted_at || details.submittedAt || new Date().toISOString(),
           answers: details.answers || []
@@ -136,6 +138,7 @@ export default function ResultScreen() {
           paper_name: params.paperName as string || 'Unknown Paper',
           score: score,
           total_questions: total,
+          total_marks: Number(params.totalMarks) || total,
           percentage: percentage,
           submitted_at: new Date().toISOString(),
           answers: []
@@ -223,13 +226,16 @@ export default function ResultScreen() {
             <View style={styles.scoreHeader}>
               <View style={styles.scoreMain}>
                 <Title style={[styles.scoreTitle, { color: getScoreColor(submission.percentage) }]}>
-                  {submission.maxPossibleScore ? 
-                    `${submission.score}/${submission.maxPossibleScore}` : 
-                    `${submission.score}/${submission.total_questions}`
+                  {submission.total_marks ? 
+                    `${submission.score}/${submission.total_marks}` : 
+                    submission.maxPossibleScore ? 
+                      `${submission.score}/${submission.maxPossibleScore}` : 
+                      `${submission.score}/${submission.total_questions}`
                   }
                 </Title>
                 <Paragraph style={[styles.scoreSubtitle, { color: theme.colors.onSurfaceVariant }]}>
-                  {submission.maxPossibleScore ? 'Marks Scored' : 'Questions Correct'}
+                  {submission.total_marks ? 'Marks Obtained' : 
+                   submission.maxPossibleScore ? 'Marks Scored' : 'Questions Correct'}
                 </Paragraph>
               </View>
               <View style={styles.gradeContainer}>
@@ -276,9 +282,9 @@ export default function ResultScreen() {
         </Card>
 
         {/* Performance Analysis */}
-        <Card style={styles.card}>
+        <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
           <Card.Content>
-            <Title style={styles.cardTitle}>Performance Analysis</Title>
+            <Title style={[styles.cardTitle, { color: theme.colors.onSurface }]}>Performance Analysis</Title>
             <View style={styles.statsContainer}>
               {isWeightageBasedEvaluation(submission) ? (
                 <>
@@ -286,8 +292,8 @@ export default function ResultScreen() {
                   <View style={styles.statItem}>
                     <Chip 
                       mode="outlined" 
-                      textStyle={{ color: '#4caf50' }}
-                      style={{ borderColor: '#4caf50' }}
+                      textStyle={{ color: '#4caf50', fontWeight: 'bold' }}
+                      style={{ borderColor: '#4caf50', backgroundColor: theme.colors.surface }}
                     >
                       {submission.score.toFixed(1)} Earned
                     </Chip>
@@ -295,17 +301,17 @@ export default function ResultScreen() {
                   <View style={styles.statItem}>
                     <Chip 
                       mode="outlined"
-                      textStyle={{ color: '#2196f3' }}
-                      style={{ borderColor: '#2196f3' }}
+                      textStyle={{ color: '#2196f3', fontWeight: 'bold' }}
+                      style={{ borderColor: '#2196f3', backgroundColor: theme.colors.surface }}
                     >
-                      {submission.maxPossibleScore || submission.total_questions} Max
+                      {submission.total_marks || submission.maxPossibleScore || submission.total_questions} Max
                     </Chip>
                   </View>
                   <View style={styles.statItem}>
                     <Chip 
                       mode="outlined"
-                      textStyle={{ color: '#ff9800' }}
-                      style={{ borderColor: '#ff9800' }}
+                      textStyle={{ color: '#ff9800', fontWeight: 'bold' }}
+                      style={{ borderColor: '#ff9800', backgroundColor: theme.colors.surface }}
                     >
                       {submission.answers.filter(a => a.partialScore && a.partialScore > 0 && a.partialScore < (a.maxPoints || 1)).length} Partial
                     </Chip>
@@ -313,8 +319,8 @@ export default function ResultScreen() {
                   <View style={styles.statItem}>
                     <Chip 
                       mode="outlined"
-                      textStyle={{ color: '#f44336' }}
-                      style={{ borderColor: '#f44336' }}
+                      textStyle={{ color: '#f44336', fontWeight: 'bold' }}
+                      style={{ borderColor: '#f44336', backgroundColor: theme.colors.surface }}
                     >
                       {submission.answers.filter(a => a.details && a.details.includes('Wrong option')).length} Zero (Wrong)
                     </Chip>
@@ -326,8 +332,8 @@ export default function ResultScreen() {
                   <View style={styles.statItem}>
                     <Chip 
                       mode="outlined" 
-                      textStyle={{ color: '#4caf50' }}
-                      style={{ borderColor: '#4caf50' }}
+                      textStyle={{ color: '#4caf50', fontWeight: 'bold' }}
+                      style={{ borderColor: '#4caf50', backgroundColor: theme.colors.surface }}
                     >
                       {submission.score} Correct
                     </Chip>
@@ -335,8 +341,8 @@ export default function ResultScreen() {
                   <View style={styles.statItem}>
                     <Chip 
                       mode="outlined"
-                      textStyle={{ color: '#f44336' }}
-                      style={{ borderColor: '#f44336' }}
+                      textStyle={{ color: '#f44336', fontWeight: 'bold' }}
+                      style={{ borderColor: '#f44336', backgroundColor: theme.colors.surface }}
                     >
                       {submission.total_questions - submission.score} Incorrect
                     </Chip>
@@ -344,8 +350,8 @@ export default function ResultScreen() {
                   <View style={styles.statItem}>
                     <Chip 
                       mode="outlined"
-                      textStyle={{ color: '#2196f3' }}
-                      style={{ borderColor: '#2196f3' }}
+                      textStyle={{ color: '#2196f3', fontWeight: 'bold' }}
+                      style={{ borderColor: '#2196f3', backgroundColor: theme.colors.surface }}
                     >
                       {submission.total_questions} Total
                     </Chip>
@@ -354,7 +360,7 @@ export default function ResultScreen() {
               )}
             </View>
             
-            <Paragraph style={styles.performanceText}>
+            <Paragraph style={[styles.performanceText, { color: theme.colors.onSurfaceVariant }]}>
               {isWeightageBasedEvaluation(submission) ? (
                 (submission.percentage || 0) >= 80 
                   ? "Excellent! You've mastered the weightage-based evaluation system and demonstrated strong understanding." 
@@ -374,10 +380,10 @@ export default function ResultScreen() {
 
         {/* Question-wise Results */}
         {submission.answers && submission.answers.length > 0 && (
-          <Card style={styles.card}>
+          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
             <Card.Content>
-              <Title style={styles.cardTitle}>Question-wise Results</Title>
-              <Paragraph style={styles.answersSubtitle}>
+              <Title style={[styles.cardTitle, { color: theme.colors.onSurface }]}>Question-wise Results</Title>
+              <Paragraph style={[styles.answersSubtitle, { color: theme.colors.onSurfaceVariant }]}>
                 {isWeightageBasedEvaluation(submission) 
                   ? "Review your answers with weightage breakdown"
                   : "Review your answers compared to the correct ones"
@@ -486,22 +492,24 @@ export default function ResultScreen() {
         )}
 
         {/* Action Buttons */}
-        <Card style={styles.card}>
+        <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
           <Card.Content>
             <View style={styles.actionButtons}>
               <Button
                 mode="outlined"
                 onPress={() => router.push('/(tabs)/student')}
-                style={styles.actionButton}
+                style={[styles.actionButton, { borderColor: theme.colors.primary }]}
+                labelStyle={{ color: theme.colors.primary }}
               >
                 Submit Another
               </Button>
               <Button
                 mode="contained"
                 onPress={() => router.push('/(tabs)/dashboard')}
-                style={styles.actionButton}
+                style={[styles.actionButton, { backgroundColor: theme.colors.primary }]}
+                labelStyle={{ color: theme.colors.onPrimary }}
               >
-                Back to Dashboard
+                Go to Dashboard
               </Button>
             </View>
           </Card.Content>
@@ -556,11 +564,11 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
-    paddingBottom: 100, // Extra bottom padding to ensure content is visible
+    paddingBottom: 120, // Extra bottom padding to ensure content is visible
   },
   scoreCard: {
     marginBottom: 20,
-    elevation: 4,
+    elevation: 6, // Increased elevation for better visibility
     borderLeftWidth: 4,
   },
   scoreHeader: {
@@ -573,57 +581,58 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scoreTitle: {
-    fontSize: 32,
+    fontSize: 36, // Increased font size for better visibility
     fontWeight: 'bold',
     marginBottom: 4,
   },
   scoreSubtitle: {
-    color: '#666',
-    fontSize: 16,
+    fontSize: 16, // Increased font size
+    fontWeight: '500', // Added font weight
   },
   gradeContainer: {
     alignItems: 'center',
   },
   gradeText: {
-    fontSize: 28,
+    fontSize: 32, // Increased font size
     fontWeight: 'bold',
   },
   percentageText: {
-    color: '#666',
-    fontSize: 14,
+    fontSize: 16, // Increased font size
+    fontWeight: '500', // Added font weight
   },
   progressBar: {
-    height: 8,
+    height: 10, // Increased height for better visibility
     backgroundColor: '#e0e0e0',
-    borderRadius: 4,
+    borderRadius: 5,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    borderRadius: 4,
+    borderRadius: 5,
   },
   card: {
     marginBottom: 20,
-    elevation: 3,
+    elevation: 4, // Increased elevation
   },
   cardTitle: {
-    fontSize: 18,
+    fontSize: 20, // Increased font size
     fontWeight: 'bold',
     marginBottom: 15,
-    color: '#333',
   },
   detailRow: {
     flexDirection: 'row',
-    marginBottom: 8,
+    marginBottom: 10, // Increased margin
+    alignItems: 'center', // Better alignment
   },
   detailLabel: {
     fontWeight: 'bold',
-    width: 80,
-    color: '#666',
+    width: 100, // Increased width for better layout
+    fontSize: 16, // Increased font size
   },
   detailValue: {
     flex: 1,
-    color: '#333',
+    fontSize: 16, // Increased font size
+    fontWeight: '500', // Added font weight
   },
   statsContainer: {
     flexDirection: 'row',
@@ -635,14 +644,17 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   performanceText: {
-    color: '#666',
     fontStyle: 'italic',
     textAlign: 'center',
-    marginTop: 10,
+    marginTop: 15,
+    fontSize: 15, // Increased font size
+    lineHeight: 22, // Better line height
+    paddingHorizontal: 10, // Added padding
   },
   answersSubtitle: {
-    color: '#666',
-    marginBottom: 10,
+    marginBottom: 15, // Increased margin
+    fontSize: 15, // Increased font size
+    fontWeight: '500', // Added font weight
   },
   questionIcon: {
     justifyContent: 'center',
