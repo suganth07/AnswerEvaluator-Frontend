@@ -25,6 +25,7 @@ interface EvaluatedSubmission {
   rollNo: string;
   score: number;
   totalQuestions: number;
+  totalMarks?: number; // Add totalMarks from papers table
   percentage: number;
   evaluationStatus: string;
   evaluationMethod: string;
@@ -65,6 +66,8 @@ export default function EvaluatedSubmissionsScreen() {
         // Ensure we have the latest data with proper field mapping
         const processedSubmissions = (data.submissions || []).map((submission: any, index: number) => {
           console.log(`Processing submission ${index}:`, submission);
+          console.log(`  - totalMarks from backend:`, submission.totalMarks);
+          console.log(`  - total_marks from backend:`, submission.total_marks);
           
           const processed = {
             id: submission.id,
@@ -73,6 +76,7 @@ export default function EvaluatedSubmissionsScreen() {
             rollNo: submission.roll_no || submission.rollNo,
             score: submission.score,
             totalQuestions: submission.total_questions || submission.totalQuestions,
+            totalMarks: submission.total_marks || submission.totalMarks, // Add total_marks from backend
             percentage: submission.percentage,
             evaluationStatus: submission.evaluation_status || submission.evaluationStatus,
             evaluationMethod: submission.evaluation_method || submission.evaluationMethod,
@@ -80,6 +84,7 @@ export default function EvaluatedSubmissionsScreen() {
           };
           
           console.log(`Processed submission ${index}:`, processed);
+          console.log(`  - Final totalMarks: ${processed.totalMarks}, totalQuestions: ${processed.totalQuestions}`);
           return processed;
         });
         
@@ -230,7 +235,9 @@ export default function EvaluatedSubmissionsScreen() {
     return '#f44336'; // Red
   };
 
-  const getGrade = (percentage: number) => {
+  const getGrade = (score: number, totalMarks: number) => {
+    if (totalMarks === 0) return 'F';
+    const percentage = (score / totalMarks) * 100;
     if (percentage >= 90) return 'A+';
     if (percentage >= 80) return 'A';
     if (percentage >= 70) return 'B';
@@ -242,6 +249,7 @@ export default function EvaluatedSubmissionsScreen() {
   const handleViewDetails = (submission: EvaluatedSubmission) => {
     const safePercentage = typeof submission.percentage === 'number' ? submission.percentage : 0;
     const safeScore = typeof submission.score === 'number' ? submission.score : 0;
+    const safeTotalMarks = typeof submission.totalMarks === 'number' ? submission.totalMarks : 0;
     const safeTotalQuestions = typeof submission.totalQuestions === 'number' ? submission.totalQuestions : 0;
     
     router.push({
@@ -251,7 +259,8 @@ export default function EvaluatedSubmissionsScreen() {
         studentName: submission.studentName || 'Unknown Student',
         paperName: paperName || 'Unknown Paper',
         score: safeScore.toString(),
-        total: safeTotalQuestions.toString(),
+        total: safeTotalMarks > 0 ? safeTotalMarks.toString() : safeTotalQuestions.toString(), // Use totalMarks if available
+        totalMarks: safeTotalMarks.toString(), // Pass totalMarks separately
         percentage: safePercentage.toString()
       }
     });
@@ -261,7 +270,12 @@ export default function EvaluatedSubmissionsScreen() {
     // Ensure we have valid numbers with fallbacks
     const safePercentage = typeof submission.percentage === 'number' ? submission.percentage : 0;
     const safeScore = typeof submission.score === 'number' ? submission.score : 0;
+    const safeTotalMarks = typeof submission.totalMarks === 'number' ? submission.totalMarks : 0;
     const safeTotalQuestions = typeof submission.totalQuestions === 'number' ? submission.totalQuestions : 0;
+    
+    // Use totalMarks if available, otherwise fall back to totalQuestions
+    const displayTotal = submission.totalMarks;
+    const scoreText = `${safeScore}/${displayTotal}`;
     
     return (
       <Card style={[styles.submissionCard, { backgroundColor: theme.colors.surface }]}>
@@ -309,16 +323,16 @@ export default function EvaluatedSubmissionsScreen() {
           <View style={styles.scoreSection}>
             <View style={styles.scoreDisplay}>
               <Text variant="headlineSmall" style={[styles.scoreText, { color: getScoreColor(safePercentage) }]}>
-                {safeScore}/{safeTotalQuestions}
+                {scoreText}
               </Text>
               <Text variant="bodyMedium" style={[styles.scoreLabel, { color: theme.colors.onSurfaceVariant }]}>
-                Questions Correct
+                {safeTotalMarks > 0 ? 'Marks Obtained' : 'Questions Correct'}
               </Text>
             </View>
             
             <View style={styles.gradeSection}>
               <Text variant="headlineMedium" style={[styles.gradeText, { color: getScoreColor(safePercentage) }]}>
-                {getGrade(safePercentage)}
+                {getGrade(safeScore, safeTotalMarks)}
               </Text>
               <Text variant="bodySmall" style={[styles.percentageText, { color: theme.colors.onSurfaceVariant }]}>
                 {safePercentage.toFixed(1)}%
@@ -347,7 +361,7 @@ export default function EvaluatedSubmissionsScreen() {
               style={[styles.chip, { borderColor: '#4caf50' }]}
               compact
             >
-              {safeScore} Correct
+              {safeScore} {safeTotalMarks > 0 ? 'Marks' : 'Correct'}
             </Chip>
             <Chip 
               mode="outlined"
@@ -355,7 +369,7 @@ export default function EvaluatedSubmissionsScreen() {
               style={[styles.chip, { borderColor: '#f44336' }]}
               compact
             >
-              {Math.max(safeTotalQuestions - safeScore, 0)} Wrong
+              {Math.max((typeof displayTotal === 'number' ? displayTotal : 0) - safeScore, 0)} {safeTotalMarks > 0 ? 'Lost' : 'Wrong'}
             </Chip>
             <Chip 
               mode="outlined"
@@ -363,7 +377,7 @@ export default function EvaluatedSubmissionsScreen() {
               style={[styles.chip, { borderColor: getScoreColor(safePercentage) }]}
               compact
             >
-              {getGrade(safePercentage)} Grade
+              {getGrade(safeScore, safeTotalMarks)} Grade
             </Chip>
           </View>
 

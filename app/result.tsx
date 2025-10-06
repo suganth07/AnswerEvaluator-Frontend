@@ -158,7 +158,9 @@ export default function ResultScreen() {
     return '#f44336'; // Red
   };
 
-  const getGrade = (percentage: number) => {
+  const getGrade = (score: number, totalMarks: number) => {
+    if (totalMarks === 0) return 'F';
+    const percentage = (score / totalMarks) * 100;
     if (percentage >= 90) return 'A+';
     if (percentage >= 80) return 'A';
     if (percentage >= 70) return 'B';
@@ -240,7 +242,7 @@ export default function ResultScreen() {
               </View>
               <View style={styles.gradeContainer}>
                 <Title style={[styles.gradeText, { color: getScoreColor(submission.percentage) }]}>
-                  {getGrade(submission.percentage)}
+                  {getGrade(submission.score, submission.total_marks || submission.maxPossibleScore || submission.total_questions)}
                 </Title>
                 <Paragraph style={[styles.percentageText, { color: theme.colors.onSurfaceVariant }]}>
                     {Number(submission.percentage || 0).toFixed(1)}%
@@ -392,34 +394,44 @@ export default function ResultScreen() {
             </Card.Content>
             
             {submission.answers.map((answer, index) => {
-              console.log(`Answer ${index}:`, answer); // Debug logging
+              console.log(`Answer ${index + 1}:`, answer); // Debug logging
               
               // Determine if this is a weightage-based question
               const hasWeightages = answer.weightageBreakdown && answer.weightageBreakdown.length > 0;
               const partialScore = answer.partialScore ?? (answer.isCorrect || answer.is_correct ? 1 : 0);
               const maxPoints = answer.maxPoints ?? 1;
               
+              // Get the question number
+              const questionNumber = answer.questionNumber || answer.question_number || index + 1;
+              
+              // Get student answer - try multiple fields
+              const studentAnswer = answer.selectedOptions 
+                ? (Array.isArray(answer.selectedOptions) ? answer.selectedOptions.join(', ') : answer.selectedOptions)
+                : answer.selectedOption || answer.textAnswer || answer.extracted_answer || 'Not detected';
+              
+              // Get correct answer - try multiple fields  
+              const correctAnswer = answer.correctOptions 
+                ? (Array.isArray(answer.correctOptions) ? answer.correctOptions.join(', ') : answer.correctOptions)
+                : answer.correct_answer || 'Not available';
+              
+              // Get question text
+              const questionText = answer.questionText || `Question ${questionNumber}`;
+              
               return (
                 <View key={index}>
                   <List.Item
-                    title={`Question ${answer.questionNumber || answer.question_number || index + 1}: ${answer.questionText || 'Question text not available'}`}
+                    title={`Question ${questionNumber}: ${questionText}`}
                     description={
                       <View style={{ marginTop: 4 }}>
-                        <Text style={styles.questionDescription}>
-                          Your answer: {answer.selectedOptions 
-                            ? (Array.isArray(answer.selectedOptions) ? answer.selectedOptions.join(', ') : answer.selectedOptions)
-                            : answer.selectedOption || answer.textAnswer || answer.extracted_answer || 'Not detected'
-                          }
+                        <Text style={[styles.questionDescription, { color: theme.colors.onSurfaceVariant }]}>
+                          Your answer: {studentAnswer}
                         </Text>
-                        <Text style={styles.questionDescription}>
-                          Correct: {answer.correctOptions 
-                            ? (Array.isArray(answer.correctOptions) ? answer.correctOptions.join(', ') : answer.correctOptions)
-                            : answer.correct_answer || 'Not available'
-                          }
+                        <Text style={[styles.questionDescription, { color: theme.colors.onSurfaceVariant }]}>
+                          Correct: {correctAnswer}
                         </Text>
                         
                         {/* Score Display */}
-                        <Text style={[styles.questionDescription, { fontWeight: 'bold', marginTop: 2 }]}>
+                        <Text style={[styles.questionDescription, { fontWeight: 'bold', marginTop: 2, color: theme.colors.onSurface }]}>
                           Score: {partialScore}{maxPoints > 1 ? `/${maxPoints}` : ''}
                           {maxPoints > 1 && ` (${((partialScore/maxPoints) * 100).toFixed(1)}%)`}
                         </Text>
@@ -436,7 +448,7 @@ export default function ResultScreen() {
                         {/* Detailed Explanation */}
                         {answer.details && (
                           <Text style={[styles.detailsText, { 
-                            color: answer.details.includes('Wrong option') ? '#f44336' : '#666'
+                            color: answer.details.includes('Wrong option') ? '#f44336' : theme.colors.onSurfaceVariant
                           }]}>
                             {answer.details}
                           </Text>
@@ -452,7 +464,7 @@ export default function ResultScreen() {
                             color: 'white'
                           }
                         ]}>
-                          {answer.questionNumber || answer.question_number || index + 1}
+                          {questionNumber}
                         </Paragraph>
                       </View>
                     )}
@@ -476,13 +488,13 @@ export default function ResultScreen() {
                            partialScore > 0 ? 'Partial' : 'Incorrect'}
                         </Chip>
                         {hasWeightages && (
-                          <Text style={{ fontSize: 10, color: '#666' }}>
+                          <Text style={{ fontSize: 10, color: theme.colors.onSurfaceVariant }}>
                             {partialScore}/{maxPoints}
                           </Text>
                         )}
                       </View>
                     )}
-                    titleStyle={styles.questionTitle}
+                    titleStyle={[styles.questionTitle, { color: theme.colors.onSurface }]}
                   />
                   {index < submission.answers.length - 1 && <Divider />}
                 </View>
