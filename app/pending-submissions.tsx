@@ -47,6 +47,9 @@ export default function PendingSubmissionsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [evaluating, setEvaluating] = useState<string | null>(null);
+  const [batchEvaluating, setBatchEvaluating] = useState(false);
+  const [currentBatchStudent, setCurrentBatchStudent] = useState<string | null>(null);
+  const [batchProgress, setBatchProgress] = useState<{current: number; total: number} | null>(null);
   const { theme, isDarkMode } = useTheme();
   const url = process.env.EXPO_PUBLIC_API_URL;
 
@@ -79,6 +82,134 @@ export default function PendingSubmissionsScreen() {
   const onRefresh = () => {
     setRefreshing(true);
     fetchPendingSubmissions();
+  };
+
+  const handleEvaluateAll = async () => {
+    if (pendingSubmissions.length === 0) {
+      Alert.alert("No Submissions", "There are no pending submissions to evaluate.");
+      return;
+    }
+
+    Alert.alert(
+      "Evaluate All Submissions",
+      `This will evaluate all ${pendingSubmissions.length} pending submissions one by one. This process may take several minutes.\n\nDo you want to continue?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Start Batch Evaluation",
+          style: "default",
+          onPress: async () => {
+            setBatchEvaluating(true);
+            setBatchProgress({ current: 0, total: pendingSubmissions.length });
+            
+            const results: {success: number; failed: number; errors: string[]} = {
+              success: 0,
+              failed: 0,
+              errors: []
+            };
+
+            for (let i = 0; i < pendingSubmissions.length; i++) {
+              const submission = pendingSubmissions[i];
+              setCurrentBatchStudent(submission.studentName);
+              setBatchProgress({ current: i + 1, total: pendingSubmissions.length });
+
+              try {
+                await evaluateSubmissionWithRetry(submission, 3);
+                results.success++;
+                console.log(`✅ Successfully evaluated: ${submission.studentName}`);
+              } catch (error: any) {
+                results.failed++;
+                results.errors.push(`${submission.studentName}: ${error.message}`);
+                console.error(`❌ Failed to evaluate: ${submission.studentName}`, error);
+              }
+
+              // Add delay between evaluations to prevent rate limiting
+              if (i < pendingSubmissions.length - 1) {
+                console.log(`⏳ Waiting 5 seconds before next evaluation...`);
+                await new Promise(resolve => setTimeout(resolve, 5000));
+              }
+            }
+
+            // Reset batch states
+            setBatchEvaluating(false);
+            setCurrentBatchStudent(null);
+            setBatchProgress(null);
+
+            // Show completion results
+            Alert.alert(
+              "Batch Evaluation Complete",
+              `Results:\n✅ Successfully evaluated: ${results.success}\n❌ Failed: ${results.failed}${results.errors.length > 0 ? `\n\nErrors:\n${results.errors.slice(0, 3).join('\n')}${results.errors.length > 3 ? '\n... and more' : ''}` : ''}`,
+              [
+                {
+                  text: "OK",
+                  onPress: () => {
+                    // Refresh the list to show updated state
+                    fetchPendingSubmissions();
+                  }
+                }
+              ]
+            );
+          }
+        }
+      ]
+    );
+  };
+
+  const evaluateSubmissionWithRetry = async (submission: PendingSubmission, maxRetries: number = 3): Promise<void> => {
+    let lastError: Error | null = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`🔄 Attempt ${attempt}/${maxRetries} for ${submission.studentName}`);
+        
+        const requestBody = {
+          paperId: paperId,
+          studentName: submission.studentName,
+          rollNo: submission.rollNo,
+          source: submission.source,
+          // Handle multi-page submissions
+          ...(submission.totalPages && submission.totalPages > 1 
+            ? { 
+                pages: submission.pages,
+                fileName: `${submission.studentName}_${submission.totalPages}_pages`
+              }
+            : (submission.source === 'drive' || submission.source === 'minio')
+              ? { fileId: submission.fileId, fileName: submission.fileName }
+              : { submissionId: submission.submissionId, imageUrl: submission.imageUrl }
+          )
+        };
+
+        const response = await fetch(`${url}/api/submissions/evaluate-pending`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          console.log(`✅ Evaluation successful for ${submission.studentName}: ${result.score}/${result.maxPossibleScore || result.totalQuestions}`);
+          return; // Success, exit retry loop
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `HTTP ${response.status}`);
+        }
+      } catch (error: any) {
+        console.error(`❌ Attempt ${attempt} failed for ${submission.studentName}:`, error.message);
+        lastError = error;
+        
+        if (attempt < maxRetries) {
+          // Exponential backoff: 2s, 4s, 8s
+          const delay = Math.pow(2, attempt) * 1000;
+          console.log(`⏳ Retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+    
+    // All attempts failed
+    throw lastError || new Error(`Failed after ${maxRetries} attempts`);
   };
 
   const handleEvaluate = async (submission: PendingSubmission) => {
@@ -183,6 +314,7 @@ export default function PendingSubmissionsScreen() {
   const PendingSubmissionCard = ({ submission }: { submission: PendingSubmission }) => {
     const submissionKey = submission.fileId || submission.submissionId?.toString() || submission.fileName;
     const isEvaluating = evaluating === submissionKey;
+    const isBatchDisabled = batchEvaluating && !isEvaluating;
 
     return (
       <Card style={[styles.submissionCard, { backgroundColor: theme.colors.surface }]}>
@@ -264,9 +396,15 @@ export default function PendingSubmissionsScreen() {
             <Button
               mode="contained"
               onPress={() => handleEvaluate(submission)}
-              disabled={isEvaluating}
+              disabled={isEvaluating || isBatchDisabled}
               loading={isEvaluating}
-              style={[styles.evaluateButton, { backgroundColor: '#F59E0B' }]}
+              style={[
+                styles.evaluateButton, 
+                { 
+                  backgroundColor: isBatchDisabled ? '#9CA3AF' : '#F59E0B',
+                  opacity: isBatchDisabled ? 0.6 : 1
+                }
+              ]}
               contentStyle={styles.buttonContent}
               labelStyle={styles.buttonLabel}
               icon="play-circle-outline"
@@ -348,10 +486,62 @@ export default function PendingSubmissionsScreen() {
       >
         {pendingSubmissions.length > 0 ? (
           <>
+            {/* Batch Evaluation Section */}
+            <View style={styles.batchSection}>
+              <View style={styles.batchHeader}>
+                <Text variant="titleMedium" style={[styles.sectionTitle, { color: theme.colors.onSurface, marginBottom: 0 }]}>
+                  Batch Operations
+                </Text>
+                {batchProgress && (
+                  <View style={styles.progressContainer}>
+                    <Text variant="bodySmall" style={[styles.progressText, { color: theme.colors.primary }]}>
+                      {batchProgress.current}/{batchProgress.total}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              
+              <Card style={[styles.batchCard, { backgroundColor: theme.colors.surfaceVariant }]}>
+                <Card.Content style={styles.batchCardContent}>
+                  <View style={styles.batchInfo}>
+                    <Ionicons name="flash" size={24} color="#10B981" />
+                    <View style={styles.batchTextContent}>
+                      <Text variant="titleSmall" style={[styles.batchTitle, { color: theme.colors.onSurface }]}>
+                        Evaluate All Submissions
+                      </Text>
+                      {batchEvaluating && currentBatchStudent ? (
+                        <Text variant="bodySmall" style={[styles.batchSubtitle, { color: theme.colors.primary }]}>
+                          Currently evaluating: {currentBatchStudent}
+                        </Text>
+                      ) : (
+                        <Text variant="bodySmall" style={[styles.batchSubtitle, { color: theme.colors.onSurfaceVariant }]}>
+                          Process all {pendingSubmissions.length} submissions automatically
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                  
+                  <Button
+                    mode="contained"
+                    onPress={handleEvaluateAll}
+                    disabled={batchEvaluating || pendingSubmissions.length === 0}
+                    loading={batchEvaluating}
+                    style={[styles.batchButton, { backgroundColor: '#10B981' }]}
+                    contentStyle={styles.batchButtonContent}
+                    labelStyle={styles.batchButtonLabel}
+                    icon="rocket-launch"
+                  >
+                    {batchEvaluating ? 'Processing...' : 'Evaluate All'}
+                  </Button>
+                </Card.Content>
+              </Card>
+            </View>
+
+            {/* Individual Submissions Section */}
             <Text variant="titleMedium" style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
               {pendingSubmissions.some(s => s.totalPages && s.totalPages > 1) 
-                ? 'Students awaiting evaluation (multi-page submissions consolidated)'
-                : 'Submissions awaiting evaluation'}
+                ? 'Individual submissions (multi-page consolidated)'
+                : 'Individual submissions'}
             </Text>
             {pendingSubmissions
               .sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime())
@@ -546,5 +736,70 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 100,
+  },
+  // Batch evaluation styles
+  batchSection: {
+    marginBottom: 24,
+  },
+  batchHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  progressContainer: {
+    backgroundColor: "#E0F2FE",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  progressText: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  batchCard: {
+    borderRadius: 16,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+  },
+  batchCardContent: {
+    padding: 20,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  batchInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  batchTextContent: {
+    marginLeft: 16,
+    flex: 1,
+  },
+  batchTitle: {
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  batchSubtitle: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  batchButton: {
+    borderRadius: 12,
+    minWidth: 120,
+  },
+  batchButtonContent: {
+    paddingVertical: 6,
+  },
+  batchButtonLabel: {
+    fontSize: 14,
+    fontWeight: "600",
   },
 });

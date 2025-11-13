@@ -82,7 +82,7 @@ export default function EvaluatedSubmissionsScreen() {
             evaluationMethod: submission.evaluation_method || submission.evaluationMethod,
             submittedAt: submission.submitted_at || submission.submittedAt || submission.uploadedAt
           };
-          
+        
           console.log(`Processed submission ${index}:`, processed);
           console.log(`  - Final totalMarks: ${processed.totalMarks}, totalQuestions: ${processed.totalQuestions}`);
           return processed;
