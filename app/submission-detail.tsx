@@ -43,6 +43,7 @@ interface Answer {
 interface SubmissionDetail {
   id: number;
   student_name: string;
+  roll_no?: string; // Add roll_no field
   paper_name: string;
   score: number | null | undefined;
   total_questions: number | null | undefined;
@@ -60,7 +61,7 @@ export default function SubmissionDetailScreen() {
 
   const {
     submissionId,
-    studentName,
+    rollNo,
     paperName,
     score,
     totalQuestions,
@@ -412,7 +413,8 @@ export default function SubmissionDetailScreen() {
   }
 
   const submissionData = submission || {
-    student_name: studentName as string,
+    student_name: 'File Submission',
+    roll_no: rollNo as string || 'Unknown',
     paper_name: paperName as string,
     score: parseInt(score as string) || 0,
     total_questions: parseInt(totalQuestions as string) || 0,
@@ -448,7 +450,7 @@ export default function SubmissionDetailScreen() {
 
           <View style={styles.submissionInfo}>
             <Text variant="headlineMedium" style={styles.studentName}>
-              {submissionData.student_name}
+              Roll: {submissionData.roll_no || params.rollNo || 'Unknown'}
             </Text>
             <Text variant="bodyLarge" style={styles.paperName}>
               {submissionData.paper_name}

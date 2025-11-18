@@ -40,15 +40,13 @@ interface ImageInfo {
 
 export default function StudentSubmissionScreen() {
   const { theme, isDarkMode } = useTheme();
-  const [studentName, setStudentName] = useState('');
-  const [rollNo, setRollNo] = useState('');
   const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null);
   const [selectedImages, setSelectedImages] = useState<ImageInfo[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [papers, setPapers] = useState<Paper[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(2);
   const [currentPage, setCurrentPage] = useState(1); // Track current page being uploaded
   const [pageImages, setPageImages] = useState<{[key: number]: ImageInfo}>({}); // Store images by page number
 
@@ -154,7 +152,7 @@ export default function StudentSubmissionScreen() {
         }
         setSelectedImages(imagesArray);
         
-        if (currentStep < 4) setCurrentStep(4);
+        if (currentStep < 3) setCurrentStep(3);
       }
     } else {
       // For single-page papers, use original logic
@@ -168,7 +166,7 @@ export default function StudentSubmissionScreen() {
 
       if (!result.canceled && result.assets[0]) {
         setSelectedImages([result.assets[0] as ImageInfo]);
-        if (currentStep < 4) setCurrentStep(4);
+        if (currentStep < 3) setCurrentStep(3);
       }
     }
   };
@@ -208,7 +206,7 @@ export default function StudentSubmissionScreen() {
         // For single-page, replace existing image
         setSelectedImages([result.assets[0] as ImageInfo]);
       }
-      if (currentStep < 4) setCurrentStep(4);
+      if (currentStep < 3) setCurrentStep(3);
     }
   };
 
@@ -260,16 +258,6 @@ export default function StudentSubmissionScreen() {
   };
 
   const submitAnswers = async () => {
-    if (!studentName.trim()) {
-      Alert.alert('Error', 'Please enter your name');
-      return;
-    }
-
-    if (!rollNo.trim()) {
-      Alert.alert('Error', 'Please enter your roll number');
-      return;
-    }
-
     if (!selectedPaper) {
       Alert.alert('Error', 'Please select a paper');
       return;
@@ -296,8 +284,6 @@ export default function StudentSubmissionScreen() {
     setSubmitting(true);
     try {
       const formData = new FormData();
-      formData.append('studentName', studentName.trim());
-      formData.append('rollNo', rollNo.trim());
       formData.append('paperId', selectedPaper.id.toString());
 
       if (isMultiPage) {
@@ -337,18 +323,16 @@ export default function StudentSubmissionScreen() {
       if (response.ok) {
         Alert.alert(
           'Submission Complete!',
-          `Your answer sheet has been submitted successfully and is pending evaluation!\n\nStudent: ${result.studentName}\nRoll Number: ${rollNo}\nPaper: ${result.paperName}\n\nStatus: Pending Evaluation\n\nYour submission will be evaluated by the admin. The system will verify your roll number matches the question paper before processing.`,
+          `Your answer sheet has been submitted successfully and is pending evaluation!\n\nFile: ${result.fileName || 'answer-sheet.jpg'}\nPaper: ${result.paperName}\n\nStatus: Pending Evaluation\n\nYour submission will be evaluated by the admin. Roll number will be extracted from your answer sheet during processing.`,
           [
             {
               text: 'Submit Another',
               onPress: () => {
-                setStudentName('');
-                setRollNo('');
                 setSelectedPaper(null);
                 setSelectedImages([]);
                 setPageImages({});
                 setCurrentPage(1);
-                setCurrentStep(1);
+                setCurrentStep(2);
               },
             },
             {
@@ -380,7 +364,6 @@ export default function StudentSubmissionScreen() {
   };
 
   const getStepStatus = (step: number) => {
-    if (step === 1) return studentName.trim() && rollNo.trim() ? 'completed' : 'current';
     if (step === 2) {
       return selectedPaper
         ? 'completed'
@@ -396,15 +379,13 @@ export default function StudentSubmissionScreen() {
         : 'pending';
     }
     if (step === 4) {
-      return currentStep >= 4 ? 'current' : 'pending';
+      return currentStep >= 3 ? 'current' : 'pending';
     }
     return 'pending';
   };
 
   const canSubmit = () => {
     return (
-      studentName.trim() &&
-      rollNo.trim() &&
       selectedPaper &&
       selectedImages.length > 0 &&
       !submitting
@@ -526,20 +507,15 @@ export default function StudentSubmissionScreen() {
         >
           <StepIndicator
             step={1}
-            title="Enter Details"
-            status={getStepStatus(1)}
-          />
-          <StepIndicator
-            step={2}
             title="Select Paper"
             status={getStepStatus(2)}
           />
           <StepIndicator
-            step={3}
+            step={2}
             title="Upload Image"
             status={getStepStatus(3)}
           />
-          <StepIndicator step={4} title="Submit" status={getStepStatus(4)} />
+          <StepIndicator step={3} title="Submit" status={getStepStatus(4)} />
         </ScrollView>
       </View>
 
@@ -555,74 +531,12 @@ export default function StudentSubmissionScreen() {
           />
         }
       >
-        {/* Step 1: Student Details */}
+
+
+        {/* Step 1: Paper Selection */}
         <View
           style={[styles.stepCard, { backgroundColor: theme.colors.surface }]}
         >
-          <View style={styles.stepHeader}>
-            <View
-              style={[
-                styles.stepIcon,
-                {
-                  backgroundColor:
-                    getStepStatus(1) === 'completed' ? '#10B981' : '#6366F1',
-                },
-              ]}
-            >
-              <Ionicons name="person" size={20} color="white" />
-            </View>
-            <Text
-              style={[styles.stepCardTitle, { color: theme.colors.onSurface }]}
-            >
-              Enter Your Details
-            </Text>
-          </View>
-          
-          <TextInput
-            label="Student Name"
-            value={studentName}
-            onChangeText={(text) => {
-              setStudentName(text);
-              if (text.trim() && rollNo.trim() && currentStep < 2) {
-                setCurrentStep(2);
-              }
-            }}
-            style={styles.textInput}
-            mode="outlined"
-            placeholder="e.g., John Smith"
-            disabled={submitting}
-            theme={{ colors: { primary: '#6366F1' } }}
-          />
-          
-          <TextInput
-            label="Roll Number"
-            value={rollNo}
-            onChangeText={(text) => {
-              setRollNo(text);
-              if (text.trim() && studentName.trim() && currentStep < 2) {
-                setCurrentStep(2);
-              }
-            }}
-            style={styles.textInput}
-            mode="outlined"
-            placeholder="e.g., 2021001"
-            disabled={submitting}
-            theme={{ colors: { primary: '#6366F1' } }}
-          />
-          
-          <View style={styles.infoNote}>
-            <Ionicons name="information-circle" size={16} color="#6366F1" />
-            <Text style={[styles.infoText, { color: theme.colors.onSurfaceVariant }]}>
-              Your roll number will be verified against the question paper during evaluation
-            </Text>
-          </View>
-        </View>
-
-        {/* Step 2: Paper Selection */}
-        {currentStep >= 2 && (
-          <View
-            style={[styles.stepCard, { backgroundColor: theme.colors.surface }]}
-          >
             <View style={styles.stepHeader}>
               <View
                 style={[
@@ -788,11 +702,10 @@ export default function StudentSubmissionScreen() {
           </View>
         )}
 
-        {/* Step 3: Upload Answer Sheets */}
-        {currentStep >= 3 && (
-          <View
-            style={[styles.stepCard, { backgroundColor: theme.colors.surface }]}
-          >
+        {/* Step 2: Upload Answer Sheets */}
+        <View
+          style={[styles.stepCard, { backgroundColor: theme.colors.surface }]}
+        >
             <View style={styles.stepHeader}>
               <View
                 style={[
@@ -1063,8 +976,8 @@ export default function StudentSubmissionScreen() {
           </View>
         )}
 
-        {/* Step 4: Submit */}
-        {currentStep >= 4 && (
+        {/* Step 3: Submit */}
+        {currentStep >= 3 && (
           <View
             style={[styles.stepCard, { backgroundColor: theme.colors.surface }]}
           >
@@ -1083,42 +996,6 @@ export default function StudentSubmissionScreen() {
             </View>
 
             <View style={styles.reviewSection}>
-              <View style={styles.reviewItem}>
-                <Text
-                  style={[
-                    styles.reviewLabel,
-                    { color: theme.colors.onSurfaceVariant },
-                  ]}
-                >
-                  Student
-                </Text>
-                <Text
-                  style={[
-                    styles.reviewValue,
-                    { color: theme.colors.onSurface },
-                  ]}
-                >
-                  {studentName}
-                </Text>
-              </View>
-              <View style={styles.reviewItem}>
-                <Text
-                  style={[
-                    styles.reviewLabel,
-                    { color: theme.colors.onSurfaceVariant },
-                  ]}
-                >
-                  Roll Number
-                </Text>
-                <Text
-                  style={[
-                    styles.reviewValue,
-                    { color: theme.colors.onSurface },
-                  ]}
-                >
-                  {rollNo}
-                </Text>
-              </View>
               <View style={styles.reviewItem}>
                 <Text
                   style={[

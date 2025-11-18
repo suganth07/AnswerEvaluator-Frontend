@@ -33,6 +33,7 @@ interface Submission {
   id: number;
   paper_id: number;
   student_name: string;
+  roll_no: string; // Add roll_no field
   score: number | null | undefined;
   total_questions: number | null | undefined;
   percentage: number | null | undefined;
@@ -273,7 +274,7 @@ export default function TestSubmissionsScreen() {
       pathname: "/submission-detail",
       params: {
         submissionId: submission.id,
-        studentName: submission.student_name,
+        rollNo: submission.roll_no || 'unknown',
         paperName: paper?.name || paperName,
         score: submission.score || 0,
         totalQuestions: submission.total_questions || 0,
@@ -416,7 +417,7 @@ export default function TestSubmissionsScreen() {
             </View>
             <Avatar.Text
               size={40}
-              label={item.student_name ? item.student_name.substring(0, 2).toUpperCase() : 'NA'}
+              label={item.roll_no && item.roll_no !== 'unknown' ? item.roll_no.substring(0, 2).toUpperCase() : 'RN'}
               style={[styles.studentAvatar, { backgroundColor: theme.colors.primary }]}
               labelStyle={{ fontSize: 14, color: theme.colors.onPrimary }}
             />
@@ -426,7 +427,7 @@ export default function TestSubmissionsScreen() {
                 style={[styles.studentName, { color: theme.colors.onSurface }]}
                 numberOfLines={1}
               >
-                {item.student_name || 'Unknown Student'}
+                Roll: {item.roll_no && item.roll_no !== 'unknown' ? item.roll_no : 'Unknown'}
               </Text>
               <Text
                 variant="bodySmall"

@@ -55,6 +55,7 @@ interface Answer {
 interface SubmissionDetails {
   id: number;
   student_name: string;
+  roll_no?: string; // Add roll number field
   paper_name: string;
   score: number;
   total_questions: number;
@@ -113,7 +114,8 @@ export default function ResultScreen() {
         // Process the submission details with proper field mapping
         const processedSubmission = {
           id: details.id,
-          student_name: details.student_name || details.studentName || 'Unknown Student',
+          student_name: details.student_name || details.studentName || 'File Submission',
+          roll_no: details.roll_no || details.rollNo || 'Unknown',
           paper_name: details.paper_name || details.paperName || params.paperName || 'Unknown Paper',
           score: Number(details.score) || 0,
           total_questions: Number(details.total_questions || details.totalQuestions) || 0,
@@ -134,7 +136,8 @@ export default function ResultScreen() {
         
         setSubmission({
           id: 0,
-          student_name: params.studentName as string || 'Unknown Student',
+          student_name: 'File Submission',
+          roll_no: params.rollNo as string || 'Unknown',
           paper_name: params.paperName as string || 'Unknown Paper',
           score: score,
           total_questions: total,
@@ -269,8 +272,8 @@ export default function ResultScreen() {
           <Card.Content>
             <Title style={[styles.cardTitle, { color: theme.colors.onSurface }]}>Submission Details</Title>
             <View style={styles.detailRow}>
-              <Paragraph style={[styles.detailLabel, { color: theme.colors.onSurfaceVariant }]}>Student:</Paragraph>
-              <Paragraph style={[styles.detailValue, { color: theme.colors.onSurface }]}>{submission.student_name}</Paragraph>
+              <Paragraph style={[styles.detailLabel, { color: theme.colors.onSurfaceVariant }]}>Roll Number:</Paragraph>
+              <Paragraph style={[styles.detailValue, { color: theme.colors.onSurface }]}>{submission.roll_no}</Paragraph>
             </View>
             <View style={styles.detailRow}>
               <Paragraph style={[styles.detailLabel, { color: theme.colors.onSurfaceVariant }]}>Paper:</Paragraph>
