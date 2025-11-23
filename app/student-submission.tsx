@@ -16,6 +16,7 @@ import { TextInput, Button, ActivityIndicator, Chip } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { useTheme } from '../context/ThemeContext';
 import { router } from 'expo-router';
 
@@ -42,6 +43,8 @@ export default function StudentSubmissionScreen() {
   const { theme, isDarkMode } = useTheme();
   const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null);
   const [selectedImages, setSelectedImages] = useState<ImageInfo[]>([]);
+  const [selectedPDF, setSelectedPDF] = useState<any>(null);
+  const [uploadType, setUploadType] = useState<'image' | 'pdf'>('image');
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [papers, setPapers] = useState<Paper[]>([]);
@@ -56,6 +59,8 @@ export default function StudentSubmissionScreen() {
 
   useEffect(() => {
     setSelectedImages([]);
+    setSelectedPDF(null);
+    setUploadType('image');
     setPageImages({});
     setCurrentPage(1);
   }, [selectedPaper]);
@@ -171,6 +176,74 @@ export default function StudentSubmissionScreen() {
     }
   };
 
+  // Bulk upload functions
+  const selectBulkImages = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Sorry, we need camera roll permissions to make this work!');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false, // Don't edit when bulk selecting
+      quality: 0.9,
+      allowsMultipleSelection: true, // Enable multiple selection
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      if (result.assets.length > 10) {
+        Alert.alert('Too Many Images', 'Please select up to 10 images at a time for better performance.');
+        return;
+      }
+
+      setSelectedImages(result.assets as ImageInfo[]);
+      setUploadType('image');
+      if (currentStep < 3) setCurrentStep(3);
+      
+      Alert.alert(
+        'Bulk Upload Selected', 
+        `Selected ${result.assets.length} images for bulk upload. These will be submitted as separate answer sheets.`
+      );
+    }
+  };
+
+  const selectBulkPDFs = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'application/pdf',
+        copyToCacheDirectory: true,
+        multiple: true, // Enable multiple PDF selection
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        if (result.assets.length > 5) {
+          Alert.alert('Too Many PDFs', 'Please select up to 5 PDF files at a time for better performance.');
+          return;
+        }
+
+        // Check total file sizes
+        const totalSize = result.assets.reduce((sum, pdf) => sum + (pdf.size || 0), 0);
+        if (totalSize > 100 * 1024 * 1024) { // 100MB total limit
+          Alert.alert('Files Too Large', 'Total PDF file size must be less than 100MB');
+          return;
+        }
+
+        setSelectedPDF(result.assets); // Store multiple PDFs
+        setUploadType('pdf');
+        if (currentStep < 3) setCurrentStep(3);
+        
+        Alert.alert(
+          'Bulk PDFs Selected', 
+          `Selected ${result.assets.length} PDF files for bulk upload.`
+        );
+      }
+    } catch (error) {
+      console.error('Error selecting bulk PDFs:', error);
+      Alert.alert('Error', 'Failed to select PDF files');
+    }
+  };
+
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
@@ -210,18 +283,48 @@ export default function StudentSubmissionScreen() {
     }
   };
 
-  const showImagePicker = () => {
+  const selectPDF = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'application/pdf',
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets?.[0]) {
+        const pdfAsset = result.assets[0];
+        console.log('Selected PDF:', pdfAsset);
+        
+        // Check file size (50MB limit)
+        if (pdfAsset.size && pdfAsset.size > 50 * 1024 * 1024) {
+          Alert.alert('File Too Large', 'PDF file must be less than 50MB');
+          return;
+        }
+        
+        setSelectedPDF(pdfAsset);
+        setUploadType('pdf');
+        if (currentStep < 3) setCurrentStep(3);
+      }
+    } catch (error) {
+      console.error('Error selecting PDF:', error);
+      Alert.alert('Error', 'Failed to select PDF file');
+    }
+  };
+
+  const showUploadOptions = () => {
     const isMultiPage = selectedPaper && (selectedPaper.total_pages || 1) > 1;
     const maxPages = selectedPaper?.total_pages || 1;
 
     Alert.alert(
       'Select Answer Sheet',
       isMultiPage 
-        ? `Upload Page ${currentPage} of ${maxPages} for this question paper.`
-        : 'Choose how you want to select your answer sheet',
+        ? `Upload Page ${currentPage} of ${maxPages} for this question paper, or upload the entire PDF.`
+        : 'Choose how you want to upload your answer sheet',
       [
         { text: 'Take Photo', onPress: takePhoto },
         { text: 'Gallery', onPress: selectImages },
+        { text: 'Upload PDF', onPress: selectPDF },
+        { text: '📤 Bulk Images', onPress: selectBulkImages },
+        { text: '📄 Bulk PDFs', onPress: selectBulkPDFs },
         { text: 'Cancel', style: 'cancel' },
       ]
     );
@@ -263,21 +366,28 @@ export default function StudentSubmissionScreen() {
       return;
     }
 
-    if (selectedImages.length === 0) {
-      Alert.alert('Error', 'Please select your answer sheet image(s)');
-      return;
-    }
-
-    const isMultiPage = (selectedPaper?.total_pages || 1) > 1;
-    if (isMultiPage) {
-      const { uploadedCount, maxPages, isComplete } = getAllUploadedPages();
-      if (!isComplete) {
-        Alert.alert(
-          'Incomplete Upload',
-          `This question paper has ${maxPages} pages, but you have only uploaded ${uploadedCount} page(s). Please upload all ${maxPages} pages before submitting.`,
-          [{ text: 'OK' }]
-        );
+    if (uploadType === 'pdf') {
+      if (!selectedPDF) {
+        Alert.alert('Error', 'Please select a PDF file');
         return;
+      }
+    } else {
+      if (selectedImages.length === 0) {
+        Alert.alert('Error', 'Please select your answer sheet image(s)');
+        return;
+      }
+
+      const isMultiPage = (selectedPaper?.total_pages || 1) > 1;
+      if (isMultiPage) {
+        const { uploadedCount, maxPages, isComplete } = getAllUploadedPages();
+        if (!isComplete) {
+          Alert.alert(
+            'Incomplete Upload',
+            `This question paper has ${maxPages} pages, but you have only uploaded ${uploadedCount} page(s). Please upload all ${maxPages} pages before submitting.`,
+            [{ text: 'OK' }]
+          );
+          return;
+        }
       }
     }
 
@@ -286,65 +396,230 @@ export default function StudentSubmissionScreen() {
       const formData = new FormData();
       formData.append('paperId', selectedPaper.id.toString());
 
-      if (isMultiPage) {
-        // Use pageImages to maintain correct page order
-        for (let pageNum = 1; pageNum <= (selectedPaper?.total_pages || 1); pageNum++) {
-          const pageImage = pageImages[pageNum];
-          if (pageImage) {
-            const imageFile = {
-              uri: pageImage.uri,
-              type: 'image/jpeg',
-              name: `answer-sheet-page-${pageNum}.jpg`,
+      if (uploadType === 'pdf') {
+        // Check if this is bulk PDF upload
+        const isBulkPDFUpload = Array.isArray(selectedPDF) && selectedPDF.length > 1;
+        
+        if (isBulkPDFUpload) {
+          // Bulk PDF submission
+          selectedPDF.forEach((pdf, index) => {
+            const pdfFile = {
+              uri: pdf.uri,
+              type: 'application/pdf',
+              name: pdf.name || `answer-sheet-${index + 1}.pdf`,
             } as any;
+            formData.append('pdfFiles', pdfFile);
+          });
 
-            formData.append('answerSheets', imageFile);
+          const response = await fetch(`${API_BASE_URL}/api/submissions/submit-bulk-pdf`, {
+            method: 'POST',
+            body: formData,
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+          });
+
+          const result = await response.json();
+
+          if (response.ok) {
+            const successCount = result.successful || 0;
+            const failedCount = result.failed || 0;
+            
+            Alert.alert(
+              'Bulk PDF Submission Complete!',
+              `Bulk PDF upload completed!\n\nTotal Files: ${result.totalFiles}\nSuccessful: ${successCount}\nFailed: ${failedCount}\n\nPaper: ${result.paperName}\n\nAll successful PDFs are being processed and will be evaluated by the admin.`,
+              [
+                {
+                  text: 'Submit Another',
+                  onPress: () => {
+                    setSelectedPaper(null);
+                    setSelectedImages([]);
+                    setSelectedPDF(null);
+                    setUploadType('image');
+                    setPageImages({});
+                    setCurrentPage(1);
+                    setCurrentStep(2);
+                  },
+                },
+                {
+                  text: 'Done',
+                  onPress: () => {
+                    router.back();
+                  },
+                },
+              ]
+            );
+          } else {
+            throw new Error(result.error || 'Bulk PDF submission failed');
+          }
+        } else {
+          // Single PDF submission
+          const pdfFile = {
+            uri: selectedPDF.uri,
+            type: 'application/pdf',
+            name: selectedPDF.name || 'answer-sheet.pdf',
+          } as any;
+
+          formData.append('answerSheet', pdfFile);
+
+          const response = await fetch(`${API_BASE_URL}/api/submissions/submit-pdf`, {
+            method: 'POST',
+            body: formData,
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+          });
+
+          const result = await response.json();
+
+          if (response.ok) {
+            Alert.alert(
+              'PDF Submission Complete!',
+              `Your PDF has been submitted successfully and is being processed!\n\nFile: ${result.pdfInfo?.originalFileName || 'answer-sheet.pdf'}\nPaper: ${result.paperName}\nPages Extracted: ${result.pagesExtracted}\n\nStatus: Processing\n\nYour PDF is being converted to images and will be evaluated by the admin.`,
+              [
+                {
+                  text: 'Submit Another',
+                  onPress: () => {
+                    setSelectedPaper(null);
+                    setSelectedImages([]);
+                    setSelectedPDF(null);
+                    setUploadType('image');
+                    setPageImages({});
+                    setCurrentPage(1);
+                    setCurrentStep(2);
+                  },
+                },
+              {
+                text: 'Done',
+                onPress: () => {
+                  router.back();
+                },
+              },
+            ]
+          );
+          } else {
+            throw new Error(result.error || 'PDF submission failed');
           }
         }
       } else {
-        const imageFile = {
-          uri: selectedImages[0].uri,
-          type: 'image/jpeg',
-          name: 'answer-sheet.jpg',
-        } as any;
+        // Image submission with bulk upload support
+        const isBulkImageUpload = selectedImages.length > 1 && (selectedPaper?.total_pages || 1) === 1;
+        const isMultiPage = (selectedPaper?.total_pages || 1) > 1;
+        
+        if (isBulkImageUpload) {
+          // Bulk image submission
+          selectedImages.forEach((image, index) => {
+            const imageFile = {
+              uri: image.uri,
+              type: 'image/jpeg',
+              name: `bulk-answer-sheet-${index + 1}.jpg`,
+            } as any;
+            formData.append('imageFiles', imageFile);
+          });
 
-        formData.append('answerSheet', imageFile);
-      }
-
-      const response = await fetch(`${API_BASE_URL}/api/submissions/submit`, {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
-      const result = await response.json();
-
-      if (response.ok) {
-        Alert.alert(
-          'Submission Complete!',
-          `Your answer sheet has been submitted successfully and is pending evaluation!\n\nFile: ${result.fileName || 'answer-sheet.jpg'}\nPaper: ${result.paperName}\n\nStatus: Pending Evaluation\n\nYour submission will be evaluated by the admin. Roll number will be extracted from your answer sheet during processing.`,
-          [
-            {
-              text: 'Submit Another',
-              onPress: () => {
-                setSelectedPaper(null);
-                setSelectedImages([]);
-                setPageImages({});
-                setCurrentPage(1);
-                setCurrentStep(2);
-              },
+          const response = await fetch(`${API_BASE_URL}/api/submissions/submit-bulk-images`, {
+            method: 'POST',
+            body: formData,
+            headers: {
+              'Content-Type': 'multipart/form-data',
             },
-            {
-              text: 'Done',
-              onPress: () => {
-                router.back();
+          });
+
+          const result = await response.json();
+
+          if (response.ok) {
+            const successCount = result.successful || 0;
+            const failedCount = result.failed || 0;
+            
+            Alert.alert(
+              'Bulk Image Submission Complete!',
+              `Bulk image upload completed!\n\nTotal Files: ${result.totalFiles}\nSuccessful: ${successCount}\nFailed: ${failedCount}\n\nPaper: ${result.paperName}\n\nAll images have been submitted and are pending evaluation by the admin.`,
+              [
+                {
+                  text: 'Submit Another',
+                  onPress: () => {
+                    setSelectedPaper(null);
+                    setSelectedImages([]);
+                    setSelectedPDF(null);
+                    setUploadType('image');
+                    setPageImages({});
+                    setCurrentPage(1);
+                    setCurrentStep(2);
+                  },
+                },
+                {
+                  text: 'Done',
+                  onPress: () => {
+                    router.back();
+                  },
+                },
+              ]
+            );
+          } else {
+            throw new Error(result.error || 'Bulk image submission failed');
+          }
+        } else if (isMultiPage) {
+          // Use pageImages to maintain correct page order
+          for (let pageNum = 1; pageNum <= (selectedPaper?.total_pages || 1); pageNum++) {
+            const pageImage = pageImages[pageNum];
+            if (pageImage) {
+              const imageFile = {
+                uri: pageImage.uri,
+                type: 'image/jpeg',
+                name: `answer-sheet-page-${pageNum}.jpg`,
+              } as any;
+
+              formData.append('answerSheets', imageFile);
+            }
+          }
+        } else {
+          const imageFile = {
+            uri: selectedImages[0].uri,
+            type: 'image/jpeg',
+            name: 'answer-sheet.jpg',
+          } as any;
+
+          formData.append('answerSheet', imageFile);
+        }
+
+        const response = await fetch(`${API_BASE_URL}/api/submissions/submit`, {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          Alert.alert(
+            'Submission Complete!',
+            `Your answer sheet has been submitted successfully and is pending evaluation!\n\nFile: ${result.fileName || 'answer-sheet.jpg'}\nPaper: ${result.paperName}\n\nStatus: Pending Evaluation\n\nYour submission will be evaluated by the admin. Roll number will be extracted from your answer sheet during processing.`,
+            [
+              {
+                text: 'Submit Another',
+                onPress: () => {
+                  setSelectedPaper(null);
+                  setSelectedImages([]);
+                  setSelectedPDF(null);
+                  setUploadType('image');
+                  setPageImages({});
+                  setCurrentPage(1);
+                  setCurrentStep(2);
+                },
               },
-            },
-          ]
-        );
-      } else {
-        throw new Error(result.error || 'Submission failed');
+              {
+                text: 'Done',
+                onPress: () => {
+                  router.back();
+                },
+              },
+            ]
+          );
+        } else {
+          throw new Error(result.error || 'Submission failed');
+        }
       }
     } catch (error: any) {
       Alert.alert('Submission Failed', error.message || 'Failed to submit answers');
@@ -385,11 +660,15 @@ export default function StudentSubmissionScreen() {
   };
 
   const canSubmit = () => {
-    return (
-      selectedPaper &&
-      selectedImages.length > 0 &&
-      !submitting
-    );
+    if (!selectedPaper || submitting) {
+      return false;
+    }
+    
+    if (uploadType === 'pdf') {
+      return selectedPDF !== null;
+    } else {
+      return selectedImages.length > 0;
+    }
   };
 
   const StepIndicator = ({
@@ -696,16 +975,16 @@ export default function StudentSubmissionScreen() {
                       color="#6366F1"
                     />
                   </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </View>
-        )}
+              ))}
+            </View>
+          )}
+        </View>
 
         {/* Step 2: Upload Answer Sheets */}
-        <View
-          style={[styles.stepCard, { backgroundColor: theme.colors.surface }]}
-        >
+        {selectedPaper && (
+          <View
+            style={[styles.stepCard, { backgroundColor: theme.colors.surface }]}
+          >
             <View style={styles.stepHeader}>
               <View
                 style={[
@@ -794,7 +1073,7 @@ export default function StudentSubmissionScreen() {
                       />
                       <View style={styles.uploadedPageActions}>
                         <TouchableOpacity
-                          onPress={showImagePicker}
+                          onPress={showUploadOptions}
                           style={styles.replaceImageBtn}
                           disabled={submitting}
                         >
@@ -809,7 +1088,7 @@ export default function StudentSubmissionScreen() {
                         styles.pageUploadArea,
                         { borderColor: isDarkMode ? '#374151' : '#E5E7EB' },
                       ]}
-                      onPress={showImagePicker}
+                      onPress={showUploadOptions}
                       disabled={submitting}
                     >
                       <Ionicons name="camera-outline" size={40} color="#6366F1" />
@@ -910,6 +1189,39 @@ export default function StudentSubmissionScreen() {
                   </View>
                 </View>
               </View>
+            ) : (uploadType === 'pdf' && selectedPDF) ? (
+              // PDF selected interface
+              <View style={styles.imagesPreview}>
+                <View style={styles.pdfPreview}>
+                  <View style={styles.pdfIconContainer}>
+                    <Ionicons name="document" size={48} color="#DC2626" />
+                  </View>
+                  <Text
+                    style={[
+                      styles.pdfFileName,
+                      { color: theme.colors.onSurface },
+                    ]}
+                  >
+                    {selectedPDF.name || 'document.pdf'}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.pdfFileSize,
+                      { color: theme.colors.onSurfaceVariant },
+                    ]}
+                  >
+                    {selectedPDF.size ? `${(selectedPDF.size / 1024 / 1024).toFixed(2)} MB` : 'PDF File'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={showUploadOptions}
+                  style={styles.changeImagesBtn}
+                  disabled={submitting}
+                >
+                  <Ionicons name="refresh" size={16} color="#6366F1" />
+                  <Text style={styles.changeImagesText}>Change PDF</Text>
+                </TouchableOpacity>
+              </View>
             ) : selectedImages.length > 0 ? (
               // Single page interface (original)
               <View style={styles.imagesPreview}>
@@ -932,7 +1244,7 @@ export default function StudentSubmissionScreen() {
                   ))}
                 </ScrollView>
                 <TouchableOpacity
-                  onPress={showImagePicker}
+                  onPress={showUploadOptions}
                   style={styles.changeImagesBtn}
                   disabled={submitting}
                 >
@@ -946,7 +1258,7 @@ export default function StudentSubmissionScreen() {
                   styles.uploadArea,
                   { borderColor: isDarkMode ? '#374151' : '#E5E7EB' },
                 ]}
-                onPress={showImagePicker}
+                onPress={showUploadOptions}
                 disabled={submitting}
               >
                 <Ionicons name="cloud-upload" size={48} color="#6366F1" />
@@ -1021,7 +1333,7 @@ export default function StudentSubmissionScreen() {
                     { color: theme.colors.onSurfaceVariant },
                   ]}
                 >
-                  Images
+                  {uploadType === 'pdf' ? 'File' : 'Images'}
                 </Text>
                 <Text
                   style={[
@@ -1029,8 +1341,10 @@ export default function StudentSubmissionScreen() {
                     { color: theme.colors.onSurface },
                   ]}
                 >
-                  {selectedImages.length} image
-                  {selectedImages.length > 1 ? 's' : ''} uploaded
+                  {uploadType === 'pdf' 
+                    ? `PDF: ${selectedPDF?.name || 'document.pdf'}` 
+                    : `${selectedImages.length} image${selectedImages.length > 1 ? 's' : ''} uploaded`
+                  }
                 </Text>
               </View>
             </View>
@@ -1067,7 +1381,7 @@ export default function StudentSubmissionScreen() {
                         !canSubmit() && styles.submitTextDisabled,
                       ]}
                     >
-                      Submit Answer Sheet
+                      {uploadType === 'pdf' ? 'Submit PDF' : 'Submit Answer Sheet'}
                     </Text>
                   </>
                 )}
@@ -1534,5 +1848,28 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     marginLeft: 6,
+  },
+  // PDF preview styles
+  pdfPreview: {
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: 'rgba(220, 38, 38, 0.05)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(220, 38, 38, 0.2)',
+    marginBottom: 16,
+  },
+  pdfIconContainer: {
+    marginBottom: 12,
+  },
+  pdfFileName: {
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  pdfFileSize: {
+    fontSize: 14,
+    textAlign: 'center',
   },
 });
